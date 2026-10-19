@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { CrmWorkspace } from '@/components/crm-workspace'
+import { CommercialWorkspace } from '@/components/commercial-workspace'
 import {
   Activity,
   Bell,
@@ -102,6 +103,7 @@ export function DashboardShell() {
           <section className="mt-6 grid gap-6 xl:grid-cols-[1.45fr_1fr]"><div className="rounded-xl border border-white/[0.07] bg-[#11161e]"><div className="flex items-center justify-between border-b border-white/[0.07] px-5 py-4"><div><h2 className="text-sm font-semibold text-slate-200">Atividade recente</h2><p className="mt-0.5 text-xs text-slate-500">Acompanhe as últimas ações do workspace</p></div><button className="text-xs font-medium text-blue-400 hover:text-blue-300">Ver histórico</button></div><div className="flex min-h-[220px] flex-col items-center justify-center px-6 text-center"><div className="mb-3 grid size-11 place-items-center rounded-full border border-white/[0.08] bg-white/[0.03]"><Activity className="size-5 text-slate-600" /></div><p className="text-sm font-medium text-slate-400">Nenhuma atividade registrada</p><p className="mt-1 max-w-xs text-xs leading-5 text-slate-600">As ações da sua equipe aparecerão aqui quando os primeiros registros forem criados.</p></div></div><div className="rounded-xl border border-white/[0.07] bg-[#11161e]"><div className="flex items-center justify-between border-b border-white/[0.07] px-5 py-4"><div><h2 className="text-sm font-semibold text-slate-200">Próximos vencimentos</h2><p className="mt-0.5 text-xs text-slate-500">Compromissos financeiros e contratuais</p></div><button className="text-slate-600 hover:text-slate-300" aria-label="Mais opções"><MoreHorizontal className="size-4" /></button></div><div className="flex min-h-[220px] flex-col items-center justify-center px-6 text-center"><div className="mb-3 grid size-11 place-items-center rounded-full border border-white/[0.08] bg-white/[0.03]"><WalletCards className="size-5 text-slate-600" /></div><p className="text-sm font-medium text-slate-400">Tudo em dia</p><p className="mt-1 max-w-xs text-xs leading-5 text-slate-600">Nenhum vencimento encontrado para os próximos dias.</p></div></div></section>
           <section className="mt-6 rounded-xl border border-white/[0.07] bg-[#11161e]"><div className="flex items-center justify-between border-b border-white/[0.07] px-5 py-4"><div><h2 className="text-sm font-semibold text-slate-200">Projetos por status</h2><p className="mt-0.5 text-xs text-slate-500">Distribuição dos projetos ativos</p></div><button className="flex items-center gap-1 text-xs text-slate-500 hover:text-slate-300">Este mês <ChevronDown className="size-3.5" /></button></div><div className="flex min-h-[150px] items-center justify-center px-6 text-center"><p className="text-xs text-slate-600">Cadastre projetos para visualizar a distribuição por status.</p></div></section>
           <CrmWorkspace />
+          <CommercialWorkspace />
           <div className="mt-7 flex items-center gap-2 text-[11px] text-slate-600"><div className="size-1.5 rounded-full bg-amber-400" />Supabase conectado · CRM pronto para seus primeiros registros.</div>
         </main>
       </div>
