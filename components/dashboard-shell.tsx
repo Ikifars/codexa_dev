@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { CrmWorkspace } from '@/components/crm-workspace'
 import { CommercialWorkspace } from '@/components/commercial-workspace'
+import { OperationsWorkspace } from '@/components/operations-workspace'
 import {
   Activity,
   Bell,
@@ -85,7 +86,7 @@ export function DashboardShell() {
   function openSection(label: string) {
     setActiveSection(label)
     setMobileOpen(false)
-    const targetId = label === 'Dashboard' ? 'dashboard-overview' : label === 'Propostas' || label === 'Contratos' ? 'commercial-workspace' : ['Leads', 'Mensagens', 'Clientes'].includes(label) ? 'crm-workspace' : null
+    const targetId = label === 'Dashboard' ? 'dashboard-overview' : label === 'Propostas' || label === 'Contratos' ? 'commercial-workspace' : ['Leads', 'Mensagens', 'Clientes'].includes(label) ? 'crm-workspace' : ['Projetos', 'Solicitações de alteração', 'Suporte'].includes(label) ? 'operations-workspace' : null
     if (targetId) window.requestAnimationFrame(() => document.getElementById(targetId)?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
   }
 
@@ -113,7 +114,8 @@ export function DashboardShell() {
           </div>}
           {['Leads', 'Mensagens', 'Clientes'].includes(activeSection) && <div id="crm-workspace" className="scroll-mt-24"><CrmWorkspace /></div>}
           {['Propostas', 'Contratos'].includes(activeSection) && <div id="commercial-workspace" className="scroll-mt-24"><CommercialWorkspace /></div>}
-          {!['Dashboard', 'Leads', 'Mensagens', 'Clientes', 'Propostas', 'Contratos'].includes(activeSection) && <section className="rounded-xl border border-white/[0.07] bg-[#11161e] p-8"><p className="text-xs font-medium uppercase tracking-[0.16em] text-blue-400">Módulo</p><h1 className="mt-2 text-2xl font-semibold text-white">{activeSection}</h1><p className="mt-2 text-sm text-slate-500">Esta página está preparada para receber os registros deste módulo.</p></section>}
+          {['Projetos', 'Solicitações de alteração', 'Suporte'].includes(activeSection) && <div id="operations-workspace" className="scroll-mt-24"><OperationsWorkspace /></div>}
+          {!['Dashboard', 'Leads', 'Mensagens', 'Clientes', 'Propostas', 'Contratos', 'Projetos', 'Solicitações de alteração', 'Suporte'].includes(activeSection) && <section className="rounded-xl border border-white/[0.07] bg-[#11161e] p-8"><p className="text-xs font-medium uppercase tracking-[0.16em] text-blue-400">Módulo</p><h1 className="mt-2 text-2xl font-semibold text-white">{activeSection}</h1><p className="mt-2 text-sm text-slate-500">Esta página está preparada para receber os registros deste módulo.</p></section>}
           <div className="mt-7 flex items-center gap-2 text-[11px] text-slate-600"><div className="size-1.5 rounded-full bg-amber-400" />Supabase conectado · CRM pronto para seus primeiros registros.</div>
         </main>
       </div>
