@@ -3,8 +3,8 @@ import type { Metadata, Viewport } from 'next'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: 'NexusOS — Gestão da software house',
-  description: 'Painel administrativo para gestão comercial, operacional e financeira.',
+  title: 'Codexa — Gestão inteligente para software houses',
+  description: 'Plataforma Codexa para gestão comercial, operacional, financeira e administrativa.',
   generator: 'v0.app',
   icons: {
     icon: [
