@@ -1,12 +1,15 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import type { AuthChangeEvent, Session } from '@supabase/supabase-js'
 import { CrmWorkspace } from '@/components/crm-workspace'
 import { CommercialWorkspace } from '@/components/commercial-workspace'
 import { OperationsWorkspace } from '@/components/operations-workspace'
 import { CatalogWorkspace } from '@/components/catalog-workspace'
 import { FinanceWorkspace } from '@/components/finance-workspace'
 import { AdminWorkspace } from '@/components/admin-workspace'
+import { AuthScreen } from '@/components/auth-screen'
+import { createClient } from '@/lib/supabase/client'
 import {
   Activity,
   Bell,
@@ -58,7 +61,6 @@ const navigation = [
   { label: 'Configurações', icon: Settings },
 ]
 
-
 const metrics = [
   { label: 'Leads ativos', value: '0', hint: 'Nenhum lead cadastrado', icon: Inbox, tone: 'blue' },
   { label: 'Clientes ativos', value: '0', hint: 'Nenhum cliente cadastrado', icon: Building2, tone: 'violet' },
@@ -81,7 +83,7 @@ const toneClasses: Record<string, string> = {
   indigo: 'bg-indigo-500/10 text-indigo-400',
 }
 
-export function DashboardShell() {
+function DashboardContent() {
   const [collapsed, setCollapsed] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
   const [activeSection, setActiveSection] = useState('Dashboard')
@@ -128,3 +130,23 @@ export function DashboardShell() {
     </div>
   )
 }
+
+export function DashboardShell() {
+  const [authenticated, setAuthenticated] = useState(false)
+  const [checking, setChecking] = useState(true)
+
+  useEffect(() => {
+    const supabase = createClient()
+    void supabase.auth.getSession().then(({ data }: { data: { session: Session | null } }) => {
+      setAuthenticated(Boolean(data.session))
+      setChecking(false)
+    })
+    const { data: listener } = supabase.auth.onAuthStateChange((_event: AuthChangeEvent, session: Session | null) => setAuthenticated(Boolean(session)))
+    return () => listener.subscription.unsubscribe()
+  }, [])
+
+  if (checking) return <main className="grid min-h-screen place-items-center bg-[#080b10] text-sm text-slate-500">Carregando sessão...</main>
+  if (!authenticated) return <AuthScreen onAuthenticated={() => setAuthenticated(true)} />
+  return <DashboardContent />
+}
+
