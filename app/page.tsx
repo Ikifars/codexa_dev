@@ -1,6 +1,6 @@
-import { DashboardShell } from '@/components/dashboard-shell'
+import { PublicLanding } from '@/components/public-landing'
 
 export default function Page() {
-  return <DashboardShell />
+  return <PublicLanding />
 }
 
