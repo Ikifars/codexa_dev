@@ -1,0 +1,31 @@
+'use client'
+
+import { CatalogWorkspace } from '@/components/catalog-workspace'
+import { CommercialWorkspace } from '@/components/commercial-workspace'
+import { OperationsWorkspace } from '@/components/operations-workspace'
+import { FinanceWorkspace } from '@/components/finance-workspace'
+import { AccountWorkspace } from '@/components/account-workspace'
+import { CrmWorkspace } from '@/components/crm-workspace'
+import { AdminWorkspace } from '@/components/admin-workspace'
+
+import { workspaceLabel } from '@/lib/workspace-modules'
+
+function ModuleFallback({ label }: { label: string }) {
+  return <section className="mt-6 rounded-xl border border-white/[0.07] bg-[#11161e] p-6"><p className="text-xs font-medium uppercase tracking-[0.16em] text-violet-400">Workspace</p><h1 className="mt-2 text-2xl font-semibold text-white">{label}</h1><p className="mt-2 text-sm text-slate-500">Gerencie registros de {label.toLowerCase()} com segurança e persistência no Supabase.</p><div className="mt-6 rounded-lg border border-dashed border-white/[0.1] p-8 text-center text-xs text-slate-500">Nenhum registro encontrado. A criação desta entidade será habilitada conforme o schema disponível.</div></section>
+}
+
+export function WorkspacePageRouter({ module }: { module: string }) {
+  const label = workspaceLabel(module)
+  if (module === 'leads' || module === 'clientes' || module === 'contatos') return <CrmWorkspace initialModule={module === 'clientes' ? 'clients' : module === 'contatos' ? 'messages' : 'leads'} />
+  if (module === 'propostas' || module === 'contratos') return <CommercialWorkspace initialTab={module === 'contratos' ? 'contracts' : 'proposals'} />
+  if (module === 'projetos' || module === 'tarefas' || module === 'solicitacoes' || module === 'suporte') return <OperationsWorkspace initialModule={module === 'tarefas' ? 'projects' : module === 'solicitacoes' ? 'change_requests' : module === 'suporte' ? 'support_tickets' : 'projects'} />
+  if (module === 'sistemas' || module === 'modulos') return <CatalogWorkspace initialTab={module === 'modulos' ? 'modules' : 'systems'} />
+  if (module === 'contas-a-receber') return <FinanceWorkspace initialTab="receivable" />
+  if (module === 'contas-a-pagar') return <FinanceWorkspace initialTab="payable" />
+  if (module === 'fluxo-de-caixa' || module === 'transacoes' || module === 'categorias-financeiras') return <FinanceWorkspace initialTab="overview" />
+  if (module === 'meu-perfil') return <AccountWorkspace section="Meu perfil" />
+  if (module === 'aparencia') return <AccountWorkspace section="Aparência" />
+  if (module === 'equipe' || module === 'relatorios' || module === 'configuracoes') return <AdminWorkspace section={label} />
+  return <ModuleFallback label={label} />
+}
+

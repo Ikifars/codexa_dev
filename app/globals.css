@@ -153,6 +153,10 @@
   }
 }
 
+.field {
+  @apply w-full rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-2.5 text-xs text-slate-200 outline-none placeholder:text-slate-600 focus:border-violet-400/60 focus:ring-1 focus:ring-violet-400/30;
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;
