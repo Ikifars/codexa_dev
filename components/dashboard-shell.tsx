@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { usePathname, useRouter } from 'next/navigation'
 import type { AuthChangeEvent, Session } from '@supabase/supabase-js'
 import { CrmWorkspace } from '@/components/crm-workspace'
 import { CommercialWorkspace } from '@/components/commercial-workspace'
@@ -42,24 +43,42 @@ import {
 } from 'lucide-react'
 
 const navigation = [
-  { label: 'Dashboard', icon: LayoutDashboard, active: true },
+  { label: 'Dashboard', icon: LayoutDashboard },
   { label: 'Leads', icon: Inbox },
-  { label: 'Mensagens', icon: Bell },
   { label: 'Clientes', icon: Building2 },
+  { label: 'Contatos', icon: Users },
   { label: 'Propostas', icon: FileText },
+  { label: 'Contratos', icon: BriefcaseBusiness },
   { label: 'Projetos', icon: FolderKanban },
+  { label: 'Tarefas', icon: ClipboardList },
   { label: 'Solicitações de alteração', icon: ClipboardList },
   { label: 'Suporte', icon: Headphones },
-  { label: 'Contratos', icon: BriefcaseBusiness },
-  { label: 'Sistemas', icon: Gauge },
+  { label: 'Sistemas dos clientes', icon: Gauge },
   { label: 'Módulos', icon: PanelsTopLeft },
   { label: 'Planos', icon: WalletCards },
   { label: 'Licenças', icon: ShieldCheck },
-  { label: 'Financeiro', icon: CircleDollarSign },
-  { label: 'Equipe', icon: Users },
+  { label: 'Contas a receber', icon: CircleDollarSign },
+  { label: 'Contas a pagar', icon: CircleDollarSign },
+  { label: 'Fluxo de caixa', icon: CircleDollarSign },
+  { label: 'Transações', icon: CircleDollarSign },
+  { label: 'Categorias financeiras', icon: CircleDollarSign },
   { label: 'Relatórios', icon: Activity },
+  { label: 'Equipe', icon: Users },
+  { label: 'Usuários', icon: Users },
+  { label: 'Papéis e permissões', icon: ShieldCheck },
+  { label: 'Meu perfil', icon: Users },
   { label: 'Configurações', icon: Settings },
+  { label: 'Aparência', icon: PanelsTopLeft },
+  { label: 'Auditoria', icon: Activity },
 ]
+
+const sectionSlugs: Record<string, string> = {
+  Dashboard: 'dashboard', Leads: 'leads', Clientes: 'clientes', Contatos: 'contatos', Propostas: 'propostas', Contratos: 'contratos',
+  Projetos: 'projetos', Tarefas: 'tarefas', 'Solicitações de alteração': 'solicitacoes', Suporte: 'suporte', 'Sistemas dos clientes': 'sistemas',
+  Módulos: 'modulos', Planos: 'planos', Licenças: 'licencas', 'Contas a receber': 'contas-a-receber', 'Contas a pagar': 'contas-a-pagar',
+  'Fluxo de caixa': 'fluxo-de-caixa', Transações: 'transacoes', 'Categorias financeiras': 'categorias-financeiras', Relatórios: 'relatorios', Equipe: 'equipe',
+  Usuários: 'usuarios', 'Papéis e permissões': 'papeis-e-permissoes', 'Meu perfil': 'meu-perfil', Configurações: 'configuracoes', Aparência: 'aparencia', Auditoria: 'auditoria',
+}
 
 const metrics = [
   { label: 'Leads ativos', value: '0', hint: 'Nenhum lead cadastrado', icon: Inbox, tone: 'blue' },
@@ -83,10 +102,11 @@ const toneClasses: Record<string, string> = {
   indigo: 'bg-indigo-500/10 text-indigo-400',
 }
 
-function DashboardContent() {
+function DashboardContent({ initialSection = 'Dashboard' }: { initialSection?: string }) {
+  const router = useRouter()
   const [collapsed, setCollapsed] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
-  const [activeSection, setActiveSection] = useState('Dashboard')
+  const [activeSection, setActiveSection] = useState(initialSection)
 
   async function signOut() {
     await createClient().auth.signOut()
@@ -94,10 +114,10 @@ function DashboardContent() {
   }
 
   function openSection(label: string) {
+    const slug = sectionSlugs[label] ?? 'dashboard'
     setActiveSection(label)
     setMobileOpen(false)
-    const targetId = label === 'Dashboard' ? 'dashboard-overview' : label === 'Propostas' || label === 'Contratos' ? 'commercial-workspace' : ['Leads', 'Mensagens', 'Clientes'].includes(label) ? 'crm-workspace' : ['Projetos', 'Solicitações de alteração', 'Suporte'].includes(label) ? 'operations-workspace' : ['Sistemas', 'Módulos', 'Planos', 'Licenças'].includes(label) ? 'catalog-workspace' : label === 'Financeiro' ? 'finance-workspace' : ['Equipe', 'Relatórios', 'Configurações'].includes(label) ? 'admin-workspace' : null
-    if (targetId) window.requestAnimationFrame(() => document.getElementById(targetId)?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
+    router.push(slug === 'dashboard' ? '/workspace' : `/workspace/${slug}`)
   }
 
   return (
@@ -111,7 +131,7 @@ function DashboardContent() {
           <button onClick={() => setCollapsed(!collapsed)} className="ml-auto hidden rounded-md p-1.5 text-slate-500 hover:bg-white/5 hover:text-slate-200 lg:block" aria-label={collapsed ? 'Expandir menu' : 'Recolher menu'}>{collapsed ? <PanelLeftOpen className="size-4" /> : <PanelLeftClose className="size-4" />}</button>
           <button onClick={() => setMobileOpen(false)} className="ml-auto rounded-md p-1.5 text-slate-500 lg:hidden" aria-label="Fechar menu"><X className="size-4" /></button>
         </div>
-        <nav className="flex-1 overflow-y-auto px-3 py-5"><p className={`mb-3 px-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-600 ${collapsed ? 'text-center' : ''}`}>{collapsed ? '•••' : 'Workspace'}</p><div className="flex flex-col gap-1">{navigation.map((item) => { const Icon = item.icon; return <button key={item.label} onClick={() => openSection(item.label)} className={`group flex items-center gap-3 rounded-lg px-3 py-2.5 text-left text-[13px] transition-colors ${activeSection === item.label ? 'bg-violet-500/12 font-medium text-violet-300' : 'text-slate-400 hover:bg-white/[0.04] hover:text-slate-100'} ${collapsed ? 'justify-center px-0' : ''}`} title={collapsed ? item.label : undefined} aria-current={activeSection === item.label ? 'page' : undefined}><Icon className={`size-[17px] shrink-0 ${item.active ? 'text-blue-400' : 'text-slate-500 group-hover:text-slate-300'}`} />{!collapsed && <><span className="truncate">{item.label}</span>{item.label !== 'Dashboard' && <span className="ml-auto rounded bg-white/[0.04] px-1.5 py-0.5 text-[9px] text-slate-600">Em breve</span>}</>}</button> })}</div></nav>
+        <nav className="flex-1 overflow-y-auto px-3 py-5"><p className={`mb-3 px-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-600 ${collapsed ? 'text-center' : ''}`}>{collapsed ? '•••' : 'Workspace'}</p><div className="flex flex-col gap-1">{navigation.map((item) => { const Icon = item.icon; return <button key={item.label} onClick={() => openSection(item.label)} className={`group flex items-center gap-3 rounded-lg px-3 py-2.5 text-left text-[13px] transition-colors ${activeSection === item.label ? 'bg-violet-500/12 font-medium text-violet-300' : 'text-slate-400 hover:bg-white/[0.04] hover:text-slate-100'} ${collapsed ? 'justify-center px-0' : ''}`} title={collapsed ? item.label : undefined} aria-current={activeSection === item.label ? 'page' : undefined}><Icon className={`size-[17px] shrink-0 ${activeSection === item.label ? 'text-violet-400' : 'text-slate-500 group-hover:text-slate-300'}`} />{!collapsed && <span className="truncate">{item.label}</span>}</button> })}</div></nav>
         {!collapsed && <div className="border-t border-white/[0.07] p-3"><div className="flex items-center gap-3 rounded-lg p-2"><div className="grid size-8 shrink-0 place-items-center rounded-full bg-slate-700 text-xs font-semibold text-slate-200">AD</div><div className="min-w-0 flex-1"><p className="truncate text-xs font-medium text-slate-200">Administrador</p><p className="truncate text-[11px] text-slate-500">Configuração pendente</p></div><ChevronDown className="size-3.5 text-slate-600" /></div></div>}
       </aside>
       {mobileOpen && <button className="fixed inset-0 z-30 bg-black/60 lg:hidden" onClick={() => setMobileOpen(false)} aria-label="Fechar menu" />}
@@ -126,7 +146,7 @@ function DashboardContent() {
           {['Propostas', 'Contratos'].includes(activeSection) && <div id="commercial-workspace" className="scroll-mt-24"><CommercialWorkspace initialTab={activeSection === 'Contratos' ? 'contracts' : 'proposals'} /></div>}
           {['Projetos', 'Solicitações de alteração', 'Suporte'].includes(activeSection) && <div id="operations-workspace" className="scroll-mt-24"><OperationsWorkspace initialModule={activeSection === 'Suporte' ? 'support_tickets' : activeSection === 'Solicitações de alteração' ? 'change_requests' : 'projects'} /></div>}
           {['Sistemas', 'Módulos', 'Planos', 'Licenças'].includes(activeSection) && <div id="catalog-workspace" className="scroll-mt-24"><CatalogWorkspace initialTab={activeSection === 'Módulos' ? 'modules' : activeSection === 'Planos' ? 'plans' : activeSection === 'Licenças' ? 'licenses' : 'systems'} /></div>}
-          {activeSection === 'Financeiro' && <div id="finance-workspace" className="scroll-mt-24"><FinanceWorkspace /></div>}
+          {['Contas a receber', 'Contas a pagar', 'Fluxo de caixa', 'Transações', 'Categorias financeiras'].includes(activeSection) && <div id="finance-workspace" className="scroll-mt-24"><FinanceWorkspace initialTab={activeSection === 'Contas a receber' ? 'receivable' : activeSection === 'Contas a pagar' ? 'payable' : 'overview'} /></div>}
           {['Equipe', 'Relatórios', 'Configurações'].includes(activeSection) && <div id="admin-workspace" className="scroll-mt-24"><AdminWorkspace section={activeSection} /></div>}
           {!['Dashboard', 'Leads', 'Mensagens', 'Clientes', 'Propostas', 'Contratos', 'Projetos', 'Solicitações de alteração', 'Suporte', 'Sistemas', 'Módulos', 'Planos', 'Licenças', 'Financeiro', 'Equipe', 'Relatórios', 'Configurações'].includes(activeSection) && <section className="rounded-xl border border-white/[0.07] bg-[#11161e] p-8"><p className="text-xs font-medium uppercase tracking-[0.16em] text-blue-400">Módulo</p><h1 className="mt-2 text-2xl font-semibold text-white">{activeSection}</h1><p className="mt-2 text-sm text-slate-500">Esta página está preparada para receber os registros deste módulo.</p></section>}
           <div className="mt-7 flex items-center gap-2 text-[11px] text-slate-600"><div className="size-1.5 rounded-full bg-amber-400" />Supabase conectado · CRM pronto para seus primeiros registros.</div>
@@ -136,7 +156,7 @@ function DashboardContent() {
   )
 }
 
-export function DashboardShell() {
+export function DashboardShell({ initialSection = 'Dashboard' }: { initialSection?: string }) {
   const [authenticated, setAuthenticated] = useState(false)
   const [checking, setChecking] = useState(true)
 
@@ -152,6 +172,6 @@ export function DashboardShell() {
 
   if (checking) return <main className="grid min-h-screen place-items-center bg-[#080b10] text-sm text-slate-500">Carregando sessão...</main>
   if (!authenticated) return <AuthScreen onAuthenticated={() => setAuthenticated(true)} />
-  return <DashboardContent />
+  return <DashboardContent initialSection={initialSection} />
 }
 
