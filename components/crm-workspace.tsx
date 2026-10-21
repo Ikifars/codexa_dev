@@ -11,8 +11,8 @@ type Message = { id: string; sender: string; subject: string; channel: string; s
 
 const statuses = ['Novo lead', 'Primeiro contato', 'Qualificação', 'Reunião agendada', 'Levantamento de requisitos', 'Proposta em preparação', 'Proposta enviada', 'Negociação', 'Fechado — ganho', 'Fechado — perdido']
 
-export function CrmWorkspace() {
-  const [module, setModule] = useState<Module>('leads')
+export function CrmWorkspace({ initialModule = 'leads' }: { initialModule?: Module }) {
+  const [module, setModule] = useState<Module>(initialModule)
   const [leads, setLeads] = useState<Lead[]>([])
   const [clients, setClients] = useState<Client[]>([])
   const [messages, setMessages] = useState<Message[]>([])

@@ -15,8 +15,8 @@ const modules = [
   ['support_tickets', Headphones, 'Suporte'],
 ] as const
 
-export function OperationsWorkspace() {
-  const [module, setModule] = useState<Module>('projects')
+export function OperationsWorkspace({ initialModule = 'projects' }: { initialModule?: Module }) {
+  const [module, setModule] = useState<Module>(initialModule)
   const [projects, setProjects] = useState<Project[]>([])
   const [requests, setRequests] = useState<ChangeRequest[]>([])
   const [tickets, setTickets] = useState<Ticket[]>([])

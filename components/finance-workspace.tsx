@@ -8,8 +8,8 @@ type Receivable = { id: string; description: string; category: string; final_amo
 type Payable = { id: string; beneficiary: string; description: string; amount: number; paid_amount: number; due_date: string; status: string }
 const money = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(value || 0))
 
-export function FinanceWorkspace() {
-  const [tab, setTab] = useState<'overview' | 'receivable' | 'payable' | 'recurring'>('overview')
+export function FinanceWorkspace({ initialTab = 'overview' }: { initialTab?: 'overview' | 'receivable' | 'payable' | 'recurring' }) {
+  const [tab, setTab] = useState<'overview' | 'receivable' | 'payable' | 'recurring'>(initialTab)
   const [receivables, setReceivables] = useState<Receivable[]>([])
   const [payables, setPayables] = useState<Payable[]>([])
   const [query, setQuery] = useState('')
@@ -36,7 +36,7 @@ export function FinanceWorkspace() {
     const supabase = createClient()
     const amount = Number(form.amount)
     const table = tab === 'payable' ? 'accounts_payable' : 'accounts_receivable'
-    const payload = tab === 'payable' ? { beneficiary: 'A definir', description: form.description, amount, paid_amount: 0, final_amount: amount, due_date: form.due_date } : { description: form.description, original_amount: amount, final_amount: amount, paid_amount: 0, due_date: form.due_date }
+    const payload = tab === 'payable' ? { beneficiary: 'A definir', description: form.description, amount, paid_amount: 0, due_date: form.due_date, status: 'Pendente' } : { description: form.description, original_amount: amount, final_amount: amount, paid_amount: 0, due_date: form.due_date, status: 'Pendente' }
     const { error } = await supabase.from(table).insert(payload)
     if (error) setMessage('Não foi possível salvar o lançamento.')
     else { setMessage('Lançamento criado.'); setShowForm(false); setForm({ description: '', amount: '', due_date: '' }); await load() }

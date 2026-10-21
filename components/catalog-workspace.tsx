@@ -12,8 +12,8 @@ type License = { id: string; license_key: string; client_id: string | null; syst
 
 const tabs = [['systems', Boxes, 'Sistemas'], ['modules', Database, 'Módulos'], ['plans', ChevronRight, 'Planos'], ['licenses', ShieldCheck, 'Licenças']] as const
 
-export function CatalogWorkspace() {
-  const [tab, setTab] = useState<CatalogTab>('systems')
+export function CatalogWorkspace({ initialTab = 'systems' }: { initialTab?: CatalogTab }) {
+  const [tab, setTab] = useState<CatalogTab>(initialTab)
   const [systems, setSystems] = useState<System[]>([])
   const [modules, setModules] = useState<Module[]>([])
   const [plans, setPlans] = useState<Plan[]>([])
