@@ -9,6 +9,7 @@ import { OperationsWorkspace } from '@/components/operations-workspace'
 import { CatalogWorkspace } from '@/components/catalog-workspace'
 import { FinanceWorkspace } from '@/components/finance-workspace'
 import { AdminWorkspace } from '@/components/admin-workspace'
+import { AccountWorkspace } from '@/components/account-workspace'
 import { AuthScreen } from '@/components/auth-screen'
 import { createClient } from '@/lib/supabase/client'
 import {
@@ -111,6 +112,7 @@ function DashboardContent({ initialSection = 'Dashboard' }: { initialSection?: s
   async function signOut() {
     await createClient().auth.signOut()
     setMobileOpen(false)
+    router.replace('/')
   }
 
   function openSection(label: string) {
@@ -148,6 +150,7 @@ function DashboardContent({ initialSection = 'Dashboard' }: { initialSection?: s
           {['Sistemas dos clientes', 'Módulos'].includes(activeSection) && <div id="catalog-workspace" className="scroll-mt-24"><CatalogWorkspace initialTab={activeSection === 'Módulos' ? 'modules' : 'systems'} /></div>}
           {['Contas a receber', 'Contas a pagar', 'Fluxo de caixa', 'Transações', 'Categorias financeiras'].includes(activeSection) && <div id="finance-workspace" className="scroll-mt-24"><FinanceWorkspace initialTab={activeSection === 'Contas a receber' ? 'receivable' : activeSection === 'Contas a pagar' ? 'payable' : 'overview'} /></div>}
           {['Equipe', 'Relatórios', 'Configurações'].includes(activeSection) && <div id="admin-workspace" className="scroll-mt-24"><AdminWorkspace section={activeSection} /></div>}
+          {['Meu perfil', 'Aparência'].includes(activeSection) && <AccountWorkspace section={activeSection} />}
           {!['Dashboard', 'Leads', 'Mensagens', 'Clientes', 'Propostas', 'Contratos', 'Projetos', 'Solicitações de alteração', 'Suporte', 'Sistemas', 'Módulos', 'Planos', 'Licenças', 'Financeiro', 'Equipe', 'Relatórios', 'Configurações'].includes(activeSection) && <section className="rounded-xl border border-white/[0.07] bg-[#11161e] p-8"><p className="text-xs font-medium uppercase tracking-[0.16em] text-blue-400">Módulo</p><h1 className="mt-2 text-2xl font-semibold text-white">{activeSection}</h1><p className="mt-2 text-sm text-slate-500">Esta página está preparada para receber os registros deste módulo.</p></section>}
           <div className="mt-7 flex items-center gap-2 text-[11px] text-slate-600"><div className="size-1.5 rounded-full bg-amber-400" />Supabase conectado · CRM pronto para seus primeiros registros.</div>
         </main>
