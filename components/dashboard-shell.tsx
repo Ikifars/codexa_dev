@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import type { AuthChangeEvent, Session } from '@supabase/supabase-js'
 import { CrmWorkspace } from '@/components/crm-workspace'
@@ -103,7 +103,7 @@ const toneClasses: Record<string, string> = {
   indigo: 'bg-indigo-500/10 text-indigo-400',
 }
 
-function DashboardContent({ initialSection = 'Dashboard' }: { initialSection?: string }) {
+function DashboardContent({ initialSection = 'Dashboard', page }: { initialSection?: string; page?: ReactNode }) {
   const router = useRouter()
   const [collapsed, setCollapsed] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
@@ -139,7 +139,7 @@ function DashboardContent({ initialSection = 'Dashboard' }: { initialSection?: s
       {mobileOpen && <button className="fixed inset-0 z-30 bg-black/60 lg:hidden" onClick={() => setMobileOpen(false)} aria-label="Fechar menu" />}
       <div className={`transition-[margin] duration-200 ${collapsed ? 'lg:ml-[78px]' : 'lg:ml-[258px]'}`}>
         <header className="sticky top-0 z-20 flex h-[72px] items-center gap-4 border-b border-white/[0.07] bg-[#0b0e13]/90 px-4 backdrop-blur-xl sm:px-7"><button className="rounded-md p-2 text-slate-400 hover:bg-white/5 lg:hidden" onClick={() => setMobileOpen(true)} aria-label="Abrir menu"><Menu className="size-5" /></button><div className="hidden items-center gap-2 text-xs text-slate-500 sm:flex"><span>Workspace</span><ChevronRight className="size-3" /><span className="text-slate-300">{activeSection}</span></div><div className="ml-auto flex items-center gap-2"><button className="hidden items-center gap-2 rounded-lg border border-white/[0.08] bg-white/[0.025] px-3 py-2 text-xs text-slate-500 transition-colors hover:border-white/15 hover:text-slate-300 md:flex"><Search className="size-3.5" />Buscar<span className="rounded border border-white/10 px-1.5 py-0.5 text-[10px] text-slate-600">⌘ K</span></button><button className="relative rounded-lg p-2 text-slate-400 hover:bg-white/5 hover:text-white" aria-label="Notificações"><Bell className="size-[18px]" /><span className="absolute right-1.5 top-1.5 size-1.5 rounded-full bg-blue-400" /></button><div className="mx-1 h-5 w-px bg-white/10" /><button onClick={() => void signOut()} className="flex items-center gap-2 rounded-lg p-1.5 pr-2 hover:bg-white/5" aria-label="Sair da conta"><div className="grid size-7 place-items-center rounded-full bg-blue-500/20 text-[10px] font-bold text-blue-300">AD</div><ChevronDown className="size-3.5 text-slate-500" /></button></div></header>
-        <main className="mx-auto max-w-[1500px] px-4 py-7 sm:px-7 lg:px-9">{activeSection === 'Dashboard' && <div id="dashboard-overview" className="scroll-mt-24"><div className="mb-8 flex flex-col justify-between gap-5 sm:flex-row sm:items-end"><div><p className="mb-2 text-xs font-medium uppercase tracking-[0.16em] text-blue-400">Visão geral</p><h1 className="text-2xl font-semibold tracking-tight text-white sm:text-[28px]">Bom dia, administrador</h1><p className="mt-1.5 text-sm text-slate-500">Acompanhe a operação da sua software house em um só lugar.</p></div><button className="flex w-fit items-center gap-2 rounded-lg bg-blue-500 px-3.5 py-2.5 text-xs font-semibold text-white shadow-lg shadow-blue-500/15 transition-colors hover:bg-blue-400"><Plus className="size-4" />Adicionar registro</button></div>
+        <main className="mx-auto max-w-[1500px] px-4 py-7 sm:px-7 lg:px-9">{page ?? <>{activeSection === 'Dashboard' && <div id="dashboard-overview" className="scroll-mt-24"><div className="mb-8 flex flex-col justify-between gap-5 sm:flex-row sm:items-end"><div><p className="mb-2 text-xs font-medium uppercase tracking-[0.16em] text-blue-400">Visão geral</p><h1 className="text-2xl font-semibold tracking-tight text-white sm:text-[28px]">Bom dia, administrador</h1><p className="mt-1.5 text-sm text-slate-500">Acompanhe a operação da sua software house em um só lugar.</p></div><button className="flex w-fit items-center gap-2 rounded-lg bg-blue-500 px-3.5 py-2.5 text-xs font-semibold text-white shadow-lg shadow-blue-500/15 transition-colors hover:bg-blue-400"><Plus className="size-4" />Adicionar registro</button></div>
           <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">{metrics.map((metric) => { const Icon = metric.icon; return <article key={metric.label} className="rounded-xl border border-white/[0.07] bg-[#11161e] p-4 transition-colors hover:border-white/[0.12]"><div className="flex items-start justify-between"><div className={`grid size-9 place-items-center rounded-lg ${toneClasses[metric.tone]}`}><Icon className="size-[17px]" /></div><button aria-label={`Mais opções de ${metric.label}`} className="text-slate-600 hover:text-slate-300"><MoreHorizontal className="size-4" /></button></div><p className="mt-4 text-xs text-slate-500">{metric.label}</p><p className="mt-1 text-xl font-semibold tracking-tight text-slate-100">{metric.value}</p><p className="mt-1 text-[11px] text-slate-600">{metric.hint}</p></article> })}</section>
           <section className="mt-6 grid gap-6 xl:grid-cols-[1.45fr_1fr]"><div className="rounded-xl border border-white/[0.07] bg-[#11161e]"><div className="flex items-center justify-between border-b border-white/[0.07] px-5 py-4"><div><h2 className="text-sm font-semibold text-slate-200">Atividade recente</h2><p className="mt-0.5 text-xs text-slate-500">Acompanhe as últimas ações do workspace</p></div><button className="text-xs font-medium text-blue-400 hover:text-blue-300">Ver histórico</button></div><div className="flex min-h-[220px] flex-col items-center justify-center px-6 text-center"><div className="mb-3 grid size-11 place-items-center rounded-full border border-white/[0.08] bg-white/[0.03]"><Activity className="size-5 text-slate-600" /></div><p className="text-sm font-medium text-slate-400">Nenhuma atividade registrada</p><p className="mt-1 max-w-xs text-xs leading-5 text-slate-600">As ações da sua equipe aparecerão aqui quando os primeiros registros forem criados.</p></div></div><div className="rounded-xl border border-white/[0.07] bg-[#11161e]"><div className="flex items-center justify-between border-b border-white/[0.07] px-5 py-4"><div><h2 className="text-sm font-semibold text-slate-200">Próximos vencimentos</h2><p className="mt-0.5 text-xs text-slate-500">Compromissos financeiros e contratuais</p></div><button className="text-slate-600 hover:text-slate-300" aria-label="Mais opções"><MoreHorizontal className="size-4" /></button></div><div className="flex min-h-[220px] flex-col items-center justify-center px-6 text-center"><div className="mb-3 grid size-11 place-items-center rounded-full border border-white/[0.08] bg-white/[0.03]"><WalletCards className="size-5 text-slate-600" /></div><p className="text-sm font-medium text-slate-400">Tudo em dia</p><p className="mt-1 max-w-xs text-xs leading-5 text-slate-600">Nenhum vencimento encontrado para os próximos dias.</p></div></div></section>
           <section className="mt-6 rounded-xl border border-white/[0.07] bg-[#11161e]"><div className="flex items-center justify-between border-b border-white/[0.07] px-5 py-4"><div><h2 className="text-sm font-semibold text-slate-200">Projetos por status</h2><p className="mt-0.5 text-xs text-slate-500">Distribuição dos projetos ativos</p></div><button className="flex items-center gap-1 text-xs text-slate-500 hover:text-slate-300">Este mês <ChevronDown className="size-3.5" /></button></div><div className="flex min-h-[150px] items-center justify-center px-6 text-center"><p className="text-xs text-slate-600">Cadastre projetos para visualizar a distribuição por status.</p></div></section>
@@ -152,6 +152,7 @@ function DashboardContent({ initialSection = 'Dashboard' }: { initialSection?: s
           {['Equipe', 'Relatórios', 'Configurações'].includes(activeSection) && <div id="admin-workspace" className="scroll-mt-24"><AdminWorkspace section={activeSection} /></div>}
           {['Meu perfil', 'Aparência'].includes(activeSection) && <AccountWorkspace section={activeSection} />}
           {!['Dashboard', 'Leads', 'Mensagens', 'Clientes', 'Propostas', 'Contratos', 'Projetos', 'Solicitações de alteração', 'Suporte', 'Sistemas', 'Módulos', 'Planos', 'Licenças', 'Financeiro', 'Equipe', 'Relatórios', 'Configurações'].includes(activeSection) && <section className="rounded-xl border border-white/[0.07] bg-[#11161e] p-8"><p className="text-xs font-medium uppercase tracking-[0.16em] text-blue-400">Módulo</p><h1 className="mt-2 text-2xl font-semibold text-white">{activeSection}</h1><p className="mt-2 text-sm text-slate-500">Esta página está preparada para receber os registros deste módulo.</p></section>}
+          </>}
           <div className="mt-7 flex items-center gap-2 text-[11px] text-slate-600"><div className="size-1.5 rounded-full bg-amber-400" />Supabase conectado · CRM pronto para seus primeiros registros.</div>
         </main>
       </div>
@@ -159,7 +160,7 @@ function DashboardContent({ initialSection = 'Dashboard' }: { initialSection?: s
   )
 }
 
-export function DashboardShell({ initialSection = 'Dashboard' }: { initialSection?: string }) {
+export function DashboardShell({ initialSection = 'Dashboard', page }: { initialSection?: string; page?: ReactNode }) {
   const [authenticated, setAuthenticated] = useState(false)
   const [checking, setChecking] = useState(true)
 
@@ -175,6 +176,6 @@ export function DashboardShell({ initialSection = 'Dashboard' }: { initialSectio
 
   if (checking) return <main className="grid min-h-screen place-items-center bg-[#080b10] text-sm text-slate-500">Carregando sessão...</main>
   if (!authenticated) return <AuthScreen onAuthenticated={() => setAuthenticated(true)} />
-  return <DashboardContent initialSection={initialSection} />
+  return <DashboardContent initialSection={initialSection} page={page} />
 }
 
