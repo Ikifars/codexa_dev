@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { ClipboardList, FolderKanban, Headphones, Loader2, Plus, Search, Trash2, X } from 'lucide-react'
+import { ProjectListWorkspace } from '@/components/project-list-workspace'
 
 type Module = 'projects' | 'change_requests' | 'support_tickets'
 type Project = { id: string; name: string; status: string; priority: string; due_date: string | null; contracted_value: number; client_id: string | null }
@@ -42,7 +43,7 @@ export function OperationsWorkspace({ initialModule = 'projects' }: { initialMod
     setLoading(false)
   }
 
-  useEffect(() => { void loadData() }, [])
+  useEffect(() => { if (module !== 'projects') void loadData() }, [module])
 
   const filtered = useMemo(() => {
     const term = query.toLowerCase()
@@ -78,6 +79,11 @@ export function OperationsWorkspace({ initialModule = 'projects' }: { initialMod
 
   const title = module === 'projects' ? 'Projetos e entregas' : module === 'change_requests' ? 'Solicitações de alteração' : 'Central de suporte'
   const empty = module === 'projects' ? 'Nenhum projeto cadastrado' : module === 'change_requests' ? 'Nenhuma solicitação cadastrada' : 'Nenhum chamado cadastrado'
+
+  const currentModule: Module = module
+  if (currentModule === 'projects') {
+    return <ProjectListWorkspace onSwitchModule={setModule} />
+  }
 
   return <section className="mt-6 rounded-xl border border-white/[0.07] bg-[#11161e]">
     <div className="flex flex-col gap-4 border-b border-white/[0.07] p-5 lg:flex-row lg:items-center lg:justify-between">

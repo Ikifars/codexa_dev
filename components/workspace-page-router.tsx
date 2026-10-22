@@ -7,6 +7,8 @@ import { FinanceWorkspace } from '@/components/finance-workspace'
 import { AccountWorkspace } from '@/components/account-workspace'
 import { CrmWorkspace } from '@/components/crm-workspace'
 import { AdminWorkspace } from '@/components/admin-workspace'
+import { LicenseWorkspace } from '@/components/license-workspace'
+import { RoleManagementWorkspace } from '@/components/role-management-workspace'
 
 import { workspaceLabel } from '@/lib/workspace-modules'
 
@@ -20,6 +22,9 @@ export function WorkspacePageRouter({ module }: { module: string }) {
   if (module === 'propostas' || module === 'contratos') return <CommercialWorkspace initialTab={module === 'contratos' ? 'contracts' : 'proposals'} />
   if (module === 'projetos' || module === 'tarefas' || module === 'solicitacoes' || module === 'suporte') return <OperationsWorkspace initialModule={module === 'tarefas' ? 'projects' : module === 'solicitacoes' ? 'change_requests' : module === 'suporte' ? 'support_tickets' : 'projects'} />
   if (module === 'sistemas' || module === 'modulos') return <CatalogWorkspace initialTab={module === 'modulos' ? 'modules' : 'systems'} />
+  if (module === 'licencas') return <LicenseWorkspace />
+  if (module === 'papeis-e-permissoes') return <RoleManagementWorkspace />
+  if (module === 'usuarios') return <RoleManagementWorkspace initialView="users" />
   if (module === 'contas-a-receber') return <FinanceWorkspace initialTab="receivable" />
   if (module === 'contas-a-pagar') return <FinanceWorkspace initialTab="payable" />
   if (module === 'fluxo-de-caixa' || module === 'transacoes' || module === 'categorias-financeiras') return <FinanceWorkspace initialTab="overview" />
@@ -28,4 +33,3 @@ export function WorkspacePageRouter({ module }: { module: string }) {
   if (module === 'equipe' || module === 'relatorios' || module === 'configuracoes') return <AdminWorkspace section={label} />
   return <ModuleFallback label={label} />
 }
-
