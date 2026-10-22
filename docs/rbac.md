@@ -1,6 +1,6 @@
 # Workspace access control
 
-The workspace uses `team_members.role_name` as each member's primary role and the existing `access_roles`, `access_permissions`, and `role_permissions` tables as its permission catalog. Access is denied when there is no active member, no active role, or no explicit permission. The `admin` role is the only built-in full-access role.
+The workspace uses `team_members.role_name` as each member's primary role and the existing `access_roles`, `access_permissions`, and `role_permissions` tables as its permission catalog. Role matching ignores surrounding whitespace and letter case, and permission grants are read through the resolved role ID so legacy name formatting cannot silently remove a member's access. Access is denied when there is no active member, no active role, or no explicit permission. The `admin` role is the only built-in full-access role.
 
 ## Applying the database changes
 
@@ -15,6 +15,8 @@ The RBAC migration seeds the standard roles and permission catalog, installs tab
 ## Server configuration
 
 Protected APIs validate the signed-in Supabase user and active team membership before using the server-only `SUPABASE_SERVICE_ROLE_KEY` (or `SUPABASE_SECRET_KEY`). Never expose either key to browser code. Role edits and member role/status changes execute through database RPCs so the database update and audit event are committed or rolled back together.
+
+Admins with `users:manage_users` can create a confirmed account and team membership from the Users panel by setting an initial password, or link an existing Supabase account by leaving the password blank. An existing unlinked team record with the same email is linked instead of duplicated. The panel also supports editing a member's name and email; email changes are synchronized with Supabase Auth. Share initial passwords with users through a secure channel. Account creation, profile changes, role changes, and status changes are audited.
 
 ## Verification limits
 

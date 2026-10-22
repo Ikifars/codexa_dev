@@ -2,11 +2,13 @@ import 'server-only'
 
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
+import { normalizeWorkspaceRoleName } from '@/lib/workspace-access'
 import { AdminApiError, createServiceClient } from './server-client'
 
 export type WorkspaceActor = {
   actorId: string
   memberId: string
+  roleId: string
   roleName: string
   supabase: ReturnType<typeof createServiceClient>
 }
@@ -48,37 +50,26 @@ export async function getWorkspaceActor(): Promise<WorkspaceActor> {
 
   const { data: roles, error: roleError } = await supabase
     .from('access_roles')
-    .select('id,is_active')
-    .eq('name', member.role_name)
-    .limit(1)
+    .select('id,name,is_active')
   if (roleError) {
     console.error('Workspace role lookup failed:', roleError.message)
     throw new AdminApiError('Não foi possível verificar seu cargo. Confira se a migração RBAC foi aplicada.', 503)
   }
-  if (!roles?.length || !roles[0].is_active) throw new AdminApiError('Seu cargo está inativo ou não foi configurado.', 403)
+  const role = (roles ?? []).find(
+    (candidate) => normalizeWorkspaceRoleName(candidate.name) === normalizeWorkspaceRoleName(member.role_name),
+  )
+  if (!role || !role.is_active) throw new AdminApiError('Seu cargo está inativo ou não foi configurado.', 403)
 
-  return { actorId: user.id, memberId: member.id, roleName: member.role_name, supabase }
+  return { actorId: user.id, memberId: member.id, roleId: role.id, roleName: role.name, supabase }
 }
 
 export async function getWorkspacePermissions(actor: WorkspaceActor): Promise<Set<string>> {
-  if (actor.roleName.toLowerCase() === 'admin') return new Set(['*'])
-
-  const { data: role, error: roleError } = await actor.supabase
-    .from('access_roles')
-    .select('id')
-    .eq('name', actor.roleName)
-    .eq('is_active', true)
-    .maybeSingle()
-  if (roleError) {
-    console.error('Workspace permission role lookup failed:', roleError.message)
-    throw new AdminApiError('Não foi possível carregar as permissões.', 503)
-  }
-  if (!role) throw new AdminApiError('Seu cargo está inativo ou não foi configurado.', 403)
+  if (normalizeWorkspaceRoleName(actor.roleName) === 'admin') return new Set(['*'])
 
   const { data: grants, error: grantsError } = await actor.supabase
     .from('role_permissions')
     .select('permission_id')
-    .eq('role_id', role.id)
+    .eq('role_id', actor.roleId)
   if (grantsError) {
     console.error('Workspace permission grants lookup failed:', grantsError.message)
     throw new AdminApiError('Não foi possível carregar as permissões.', 503)

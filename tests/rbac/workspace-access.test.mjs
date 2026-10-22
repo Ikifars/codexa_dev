@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { hasWorkspaceAccess } from '../../lib/workspace-access.ts'
+import { hasWorkspaceAccess, normalizeWorkspaceRoleName } from '../../lib/workspace-access.ts'
 
 test('denies routes when no explicit permission is present', () => {
   assert.equal(hasWorkspaceAccess([], 'clientes'), false)
@@ -19,4 +19,9 @@ test('dashboard and administrator access require their explicit grant or the adm
   assert.equal(hasWorkspaceAccess(['dashboard_comercial:view'], 'dashboard'), true)
   assert.equal(hasWorkspaceAccess(['clients:view'], 'dashboard'), false)
   assert.equal(hasWorkspaceAccess(['*'], 'papeis-e-permissoes'), true)
+})
+
+test('normalizes role names before resolving stored role assignments', () => {
+  assert.equal(normalizeWorkspaceRoleName('  ADMIN  '), 'admin')
+  assert.equal(normalizeWorkspaceRoleName('FINANCEIRO'), 'financeiro')
 })

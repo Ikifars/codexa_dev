@@ -29,9 +29,9 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  let body: { email?: unknown; fullName?: unknown; roleName?: unknown }
+  let body: { email?: unknown; fullName?: unknown; roleName?: unknown; password?: unknown }
   try {
-    body = await request.json() as { email?: unknown; fullName?: unknown; roleName?: unknown }
+    body = await request.json() as { email?: unknown; fullName?: unknown; roleName?: unknown; password?: unknown }
   } catch {
     return NextResponse.json({ error: 'Corpo da solicitação inválido.' }, { status: 400 })
   }
@@ -44,15 +44,16 @@ export async function POST(request: Request) {
   try {
     const actor = await requireWorkspacePermission('users', 'manage_users')
     const email = body.email.trim().toLowerCase()
+    const fullName = body.fullName.trim()
     const { data: role, error: roleError } = await actor.supabase
       .from('access_roles').select('id,name,is_active').eq('name', body.roleName).maybeSingle()
     if (roleError) throw roleError
     if (!role || !role.is_active) return NextResponse.json({ error: 'O cargo selecionado está inativo ou não existe.' }, { status: 400 })
     const actorPermissions = await getWorkspacePermissions(actor)
-    if (role.name.toLowerCase() === 'admin' && !actorPermissions.has('*')) {
-      return NextResponse.json({ error: 'Seu cargo não permite convidar administradores.' }, { status: 403 })
+    if (role.name.trim().toLowerCase() === 'admin' && !actorPermissions.has('*')) {
+      return NextResponse.json({ error: 'Seu cargo não permite criar administradores.' }, { status: 403 })
     }
-    if (role.name.toLowerCase() !== 'admin' && !actorPermissions.has('*')) {
+    if (role.name.trim().toLowerCase() !== 'admin' && !actorPermissions.has('*')) {
       const { data: grants, error: grantsError } = await actor.supabase
         .from('role_permissions').select('permission_id').eq('role_id', role.id)
       if (grantsError) throw grantsError
@@ -66,41 +67,97 @@ export async function POST(request: Request) {
       }
     }
 
-    const { data: existingMembers, error: existingError } = await actor.supabase
-      .from('team_members').select('id').eq('email', email).limit(1)
+    const { data: existingMember, error: existingError } = await actor.supabase
+      .from('team_members').select('id,user_id').ilike('email', email).maybeSingle()
     if (existingError) throw existingError
-    if (existingMembers?.length) return NextResponse.json({ error: 'Já existe um cadastro da equipe para este e-mail.' }, { status: 409 })
+    if (existingMember?.user_id) return NextResponse.json({ error: 'Já existe um cadastro da equipe para este e-mail.' }, { status: 409 })
 
-    const { data: invitation, error: inviteError } = await actor.supabase.auth.admin.inviteUserByEmail(email)
-    if (inviteError || !invitation.user) {
-      console.error('Team invitation failed:', inviteError?.message ?? 'Invitation returned no user')
-      return NextResponse.json({ error: 'O convite não foi enviado. Verifique a configuração de e-mail do Supabase.' }, { status: 502 })
+    let authUser: { id: string } | null = null
+    let createdAuthUser = false
+    for (let page = 1; !authUser; page += 1) {
+      const { data, error } = await actor.supabase.auth.admin.listUsers({ page, perPage: 1000 })
+      if (error) {
+        console.error('Team account lookup failed:', error.message)
+        throw new AdminApiError('Não foi possível verificar a conta de autenticação.', 503)
+      }
+      const found = data.users.find((user) => user.email?.trim().toLowerCase() === email)
+      if (found) {
+        authUser = { id: found.id }
+        break
+      }
+      if (data.users.length < 1000) break
     }
-    const { data: member, error: memberError } = await actor.supabase.from('team_members').insert({
-      id: crypto.randomUUID(),
-      user_id: invitation.user.id,
-      full_name: body.fullName.trim(),
-      email,
-      role_name: role.name,
-      status: 'Ativo',
-      joined_on: new Date().toISOString().slice(0, 10),
-    }).select('id,user_id,full_name,email,role_name,status,created_at,updated_at').single()
+
+    if (!authUser) {
+      if (typeof body.password !== 'string' || body.password.length < 8 || body.password.length > 128) {
+        return NextResponse.json({ error: 'Informe uma senha inicial de 8 a 128 caracteres para criar a conta.' }, { status: 400 })
+      }
+      const { data, error } = await actor.supabase.auth.admin.createUser({
+        email,
+        password: body.password,
+        email_confirm: true,
+        user_metadata: { full_name: fullName },
+      })
+      if (error || !data.user) {
+        console.error('Team account creation failed:', error?.message ?? 'Creation returned no user')
+        return NextResponse.json({ error: 'Não foi possível criar a conta de autenticação.' }, { status: 502 })
+      }
+      authUser = { id: data.user.id }
+      createdAuthUser = true
+    }
+
+    const { data: existingAuthMemberships, error: authMembershipError } = await actor.supabase
+      .from('team_members').select('id').eq('user_id', authUser.id).limit(1)
+    if (authMembershipError) throw authMembershipError
+    if (existingAuthMemberships?.length) {
+      if (createdAuthUser) {
+        const { error: cleanupError } = await actor.supabase.auth.admin.deleteUser(authUser.id)
+        if (cleanupError) console.error('Orphaned team account cleanup failed:', cleanupError.message)
+      }
+      return NextResponse.json({ error: 'Esta conta já está vinculada a um membro da equipe.' }, { status: 409 })
+    }
+
+    const memberQuery = existingMember
+      ? actor.supabase.from('team_members').update({
+        user_id: authUser.id,
+        full_name: fullName,
+        email,
+        role_name: role.name,
+        status: 'Ativo',
+        updated_at: new Date().toISOString(),
+      }).eq('id', existingMember.id)
+      : actor.supabase.from('team_members').insert({
+        id: crypto.randomUUID(),
+        user_id: authUser.id,
+        full_name: fullName,
+        email,
+        role_name: role.name,
+        status: 'Ativo',
+        joined_on: new Date().toISOString().slice(0, 10),
+      })
+    const { data: member, error: memberError } = await memberQuery
+      .select('id,user_id,full_name,email,role_name,status,created_at,updated_at').single()
     if (memberError || !member) {
-      console.error('Team invitation membership creation failed:', memberError?.message ?? 'Membership returned no row')
-      return NextResponse.json({ error: 'O convite foi enviado, mas o vínculo de equipe não foi salvo; revise antes de reenviar.' }, { status: 503 })
+      console.error('Team account membership creation failed:', memberError?.message ?? 'Membership returned no row')
+      if (createdAuthUser) {
+        const { error: cleanupError } = await actor.supabase.auth.admin.deleteUser(authUser.id)
+        if (cleanupError) console.error('Orphaned team account cleanup failed:', cleanupError.message)
+      }
+      return NextResponse.json({ error: 'A conta foi localizada/criada, mas o vínculo com a equipe não foi salvo. Verifique a lista antes de tentar novamente.' }, { status: 503 })
     }
     const { error: auditError } = await actor.supabase.from('admin_audit_events').insert({
       actor_id: actor.actorId,
-      action_name: 'team.invited',
+      action_name: createdAuthUser ? 'team.created' : 'team.linked',
       entity_type: 'team_member',
       entity_id: member.id,
-      new_data: { role_name: role.name, status: member.status },
+      new_data: { email: member.email, role_name: role.name, status: member.status },
       result: 'success',
     })
-    if (auditError) console.error('Team invitation audit failed:', auditError.message)
+    if (auditError) console.error('Team account audit failed:', auditError.message)
     return NextResponse.json({
       member,
-      warning: auditError ? 'Usuário convidado, mas a auditoria não pôde ser salva.' : null,
+      warning: auditError ? 'Usuário associado, mas a auditoria não pôde ser salva.' : null,
+      accountCreated: createdAuthUser,
     }, { status: 201 })
   } catch (error) {
     return fail(error)

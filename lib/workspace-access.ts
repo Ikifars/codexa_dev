@@ -33,3 +33,7 @@ export function hasWorkspaceAccess(permissions: string[], slug: string): boolean
   const required = workspaceAccess[slug]
   return Boolean(required?.some((permission) => permissions.includes(permission)))
 }
+
+export function normalizeWorkspaceRoleName(name: string): string {
+  return name.trim().toLocaleLowerCase('pt-BR')
+}
