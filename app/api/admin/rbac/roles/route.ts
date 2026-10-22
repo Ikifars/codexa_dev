@@ -137,3 +137,53 @@ export async function PUT(request: Request) {
     return fail(error)
   }
 }
+
+export async function DELETE(request: Request) {
+  let body: { id?: unknown; reassignToRoleId?: unknown }
+  try {
+    body = await request.json() as { id?: unknown; reassignToRoleId?: unknown }
+  } catch {
+    return NextResponse.json({ error: 'Corpo da solicitação inválido.' }, { status: 400 })
+  }
+  if (typeof body.id !== 'string' || !uuidPattern.test(body.id)
+    || (body.reassignToRoleId !== undefined
+      && body.reassignToRoleId !== null
+      && (typeof body.reassignToRoleId !== 'string' || !uuidPattern.test(body.reassignToRoleId)))) {
+    return NextResponse.json({ error: 'Cargo ou cargo de destino inválido.' }, { status: 400 })
+  }
+
+  try {
+    const actor = await requireWorkspacePermission('roles', 'manage_roles')
+    const { data, error } = await actor.supabase.rpc('delete_workspace_role', {
+      p_actor_id: actor.actorId,
+      p_role_id: body.id,
+      p_reassign_role_id: typeof body.reassignToRoleId === 'string' ? body.reassignToRoleId : null,
+    })
+    if (error) {
+      if (error.code === '42501') {
+        return NextResponse.json({ error: 'Você não tem permissão para excluir este cargo ou atribuir o cargo de destino.' }, { status: 403 })
+      }
+      if (error.code === '22023') {
+        return NextResponse.json({ error: 'O cargo de destino está inativo, é inválido ou não pode ser usado.' }, { status: 400 })
+      }
+      if (error.code === 'P0002') return NextResponse.json({ error: 'Cargo não encontrado.' }, { status: 404 })
+      if (error.code === '23514') {
+        const memberCount = typeof error.details === 'string' && /^\d+$/.test(error.details)
+          ? Number(error.details)
+          : null
+        return NextResponse.json({
+          error: 'Este cargo possui usuários vinculados. Escolha um cargo ativo para reatribuí-los antes de excluir.',
+          ...(memberCount !== null && Number.isSafeInteger(memberCount) ? { memberCount } : {}),
+        }, { status: 409 })
+      }
+      console.error('Atomic role deletion failed:', error.message)
+      return NextResponse.json({ error: 'Não foi possível excluir o cargo.' }, { status: 503 })
+    }
+    if (!data || typeof data !== 'object' || !('role_id' in data)) {
+      throw new AdminApiError('O banco não confirmou a exclusão do cargo.', 503)
+    }
+    return NextResponse.json(data)
+  } catch (error) {
+    return fail(error)
+  }
+}

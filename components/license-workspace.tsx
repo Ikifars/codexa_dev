@@ -30,6 +30,11 @@ type LicenseData = { clients: Client[]; systems: System[]; licenses: License[] }
 const inputClass = 'field rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-2.5 text-sm text-slate-200 outline-none placeholder:text-slate-600 focus:border-blue-400/60'
 const statusNames: Record<string, string> = { active: 'Ativa', suspended: 'Suspensa', revoked: 'Revogada' }
 
+function licenseStatusLabel(license: License) {
+  if (license.status === 'active' && license.expires_at && new Date(license.expires_at).getTime() < Date.now()) return 'Expirada'
+  return statusNames[license.status] ?? license.status
+}
+
 async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
   const response = await fetch(url, {
     ...init,
@@ -40,7 +45,8 @@ async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
   return result
 }
 
-export function LicenseWorkspace() {
+export function LicenseWorkspace({ permissions }: { permissions: string[] }) {
+  const canManage = permissions.includes('*') || permissions.includes('licenses:manage_licenses')
   const [data, setData] = useState<LicenseData>({ clients: [], systems: [], licenses: [] })
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -194,9 +200,9 @@ export function LicenseWorkspace() {
         <h1 className="text-2xl font-semibold text-white">Licenças</h1>
         <p className="mt-1.5 text-sm text-slate-500">Gerencie chaves, validade, contratação e liberação dos módulos por sistema.</p>
       </div>
-      <button onClick={() => { setShowForm((value) => !value); setError('') }} className="flex w-fit items-center gap-2 rounded-lg bg-blue-500 px-3.5 py-2.5 text-xs font-semibold text-white hover:bg-blue-400">
+      {canManage && <button onClick={() => { setShowForm((value) => !value); setError('') }} className="flex w-fit items-center gap-2 rounded-lg bg-blue-500 px-3.5 py-2.5 text-xs font-semibold text-white hover:bg-blue-400">
         {showForm ? <X className="size-4" /> : <Plus className="size-4" />}{showForm ? 'Fechar' : 'Nova licença'}
-      </button>
+      </button>}
     </header>
 
     {error && <div role="alert" className="rounded-lg border border-rose-500/20 bg-rose-500/10 px-4 py-3 text-sm text-rose-300">{error}</div>}
@@ -248,17 +254,18 @@ export function LicenseWorkspace() {
         return <article key={license.id} className="rounded-xl border border-white/[0.07] bg-[#11161e]">
           <div className="grid gap-4 border-b border-white/[0.06] p-5 lg:grid-cols-[1fr_150px_190px_auto] lg:items-center">
             <div><p className="text-sm font-medium text-white">{client}</p><p className="mt-1 text-xs text-slate-500">{system}</p><p className="mt-2 text-[11px] text-slate-600">Criada em {new Date(license.created_at).toLocaleDateString('pt-BR')}</p></div>
-            <label className="text-[11px] text-slate-500">Status
+            {canManage ? <label className="text-[11px] text-slate-500">Status
+              <span className={`mt-1.5 block text-xs font-medium ${licenseStatusLabel(license) === 'Ativa' ? 'text-emerald-200' : 'text-amber-100'}`}>{licenseStatusLabel(license)}</span>
               <select value={license.status} onChange={(event) => void updateLicense(license.id, { status: event.target.value })} className={`${inputClass} mt-1.5 w-full text-xs`}>
                 {Object.entries(statusNames).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
               </select>
-            </label>
-            <label className="text-[11px] text-slate-500">Expira em
+            </label> : <div className="text-[11px] text-slate-500">Status<span className={`mt-1.5 inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${licenseStatusLabel(license) === 'Ativa' ? 'bg-emerald-400/10 text-emerald-200' : 'bg-amber-400/10 text-amber-100'}`}>{licenseStatusLabel(license)}</span></div>}
+            {canManage ? <label className="text-[11px] text-slate-500">Expira em
               <input type="date" value={license.expires_at ? new Date(license.expires_at).toISOString().slice(0, 10) : ''} onChange={(event) => void updateLicense(license.id, { expiresAt: event.target.value || null })} className={`${inputClass} mt-1.5 w-full text-xs`} />
-            </label>
-            <button type="button" onClick={() => void deleteLicense(license)} disabled={deletingId === license.id} title="Excluir licença permanentemente" aria-label={`Excluir licença de ${client}`} className="inline-flex items-center justify-center gap-2 rounded-lg border border-rose-400/20 px-3 py-2.5 text-xs font-medium text-rose-200 hover:bg-rose-400/10 disabled:cursor-wait disabled:opacity-50">
+            </label> : <div className="text-[11px] text-slate-500">Expira em<span className="mt-2 block text-xs text-slate-300">{license.expires_at ? new Date(license.expires_at).toLocaleDateString('pt-BR') : 'Sem expiração'}</span></div>}
+            {canManage && <button type="button" onClick={() => void deleteLicense(license)} disabled={deletingId === license.id} title="Excluir licença permanentemente" aria-label={`Excluir licença de ${client}`} className="inline-flex items-center justify-center gap-2 rounded-lg border border-rose-400/20 px-3 py-2.5 text-xs font-medium text-rose-200 hover:bg-rose-400/10 disabled:cursor-wait disabled:opacity-50">
               {deletingId === license.id ? <Loader2 className="size-4 animate-spin" /> : <Trash2 className="size-4" />}<span className="lg:hidden">Excluir</span>
-            </button>
+            </button>}
           </div>
           <div className="p-5">
             <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
@@ -268,8 +275,8 @@ export function LicenseWorkspace() {
             {license.modules.length ? <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">{license.modules.map((module) => <div key={module.id} className="flex items-center justify-between gap-3 rounded-lg border border-white/[0.06] bg-white/[0.015] px-3 py-2.5">
               <div className="min-w-0"><p className="truncate text-xs font-medium text-slate-200">{module.name}</p><p className="mt-1 truncate font-mono text-[10px] text-slate-600">{module.internal_code} · {module.availability_status}</p></div>
               <div className="flex shrink-0 items-center gap-3">
-                <label className="flex items-center gap-1.5 text-[10px] text-slate-500"><input type="checkbox" checked={module.is_contracted} onChange={(event) => void updateModule(license.id, module, event.target.checked, event.target.checked && module.is_enabled)} className="accent-blue-500" />Contratado</label>
-                <label className="flex items-center gap-1.5 text-[10px] text-slate-500"><input type="checkbox" checked={module.is_enabled} disabled={!module.is_contracted || !isModuleAvailable(module.availability_status)} onChange={(event) => void updateModule(license.id, module, module.is_contracted, event.target.checked)} className="accent-emerald-500 disabled:opacity-40" />Liberado</label>
+                <label className="flex items-center gap-1.5 text-[10px] text-slate-500"><input type="checkbox" checked={module.is_contracted} disabled={!canManage} onChange={(event) => void updateModule(license.id, module, event.target.checked, event.target.checked && module.is_enabled)} className="accent-blue-500 disabled:opacity-40" />Contratado</label>
+                <label className="flex items-center gap-1.5 text-[10px] text-slate-500"><input type="checkbox" checked={module.is_enabled} disabled={!canManage || !module.is_contracted || !isModuleAvailable(module.availability_status)} onChange={(event) => void updateModule(license.id, module, module.is_contracted, event.target.checked)} className="accent-emerald-500 disabled:opacity-40" />Liberado</label>
               </div>
             </div>)}</div> : <p className="rounded-lg border border-dashed border-white/[0.08] p-5 text-center text-xs text-slate-600">Nenhum módulo cadastrado para este sistema.</p>}
           </div>

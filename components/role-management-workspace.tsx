@@ -1,7 +1,7 @@
 'use client'
 
 import { FormEvent, useEffect, useMemo, useState } from 'react'
-import { Eye, Loader2, Pencil, Plus, Save, Search, Shield, Users, X } from 'lucide-react'
+import { Eye, Loader2, Pencil, Plus, Save, Search, Shield, Trash2, Users, X } from 'lucide-react'
 
 type Permission = { id: string; module_name: string; action_name: string }
 type Role = {
@@ -107,6 +107,8 @@ export function RoleManagementWorkspace({ initialView = 'roles' }: { initialView
   const [roleDescription, setRoleDescription] = useState('')
   const [roleActive, setRoleActive] = useState(true)
   const [roleGrants, setRoleGrants] = useState<string[]>([])
+  const [deletingRole, setDeletingRole] = useState<Role | null>(null)
+  const [reassignRoleId, setReassignRoleId] = useState('')
 
   async function load() {
     setLoading(true)
@@ -216,6 +218,55 @@ export function RoleManagementWorkspace({ initialView = 'roles' }: { initialView
     }
   }
 
+  async function deleteRole() {
+    if (!deletingRole) return
+    if (deletingRole.memberCount > 0 && !reassignRoleId) {
+      setError('Selecione um cargo ativo para reatribuir os usuários antes de excluir.')
+      return
+    }
+
+    setSaving(true)
+    setError('')
+    setNotice('')
+    try {
+      const response = await fetch('/api/admin/rbac/roles', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: deletingRole.id,
+          ...(reassignRoleId ? { reassignToRoleId: reassignRoleId } : {}),
+        }),
+      })
+      const result = await response.json() as {
+        error?: string
+        role_id?: string
+        reassigned_member_count?: number
+        memberCount?: number
+      }
+      if (!response.ok) {
+        const memberCount = result.memberCount
+        if (typeof memberCount === 'number') {
+          setRoles((current) => current.map((item) => item.id === deletingRole.id
+            ? { ...item, memberCount }
+            : item))
+        }
+        throw new Error(result.error || 'Não foi possível excluir o cargo.')
+      }
+
+      const reassignedCount = result.reassigned_member_count ?? 0
+      setDeletingRole(null)
+      setReassignRoleId('')
+      setNotice(reassignedCount > 0
+        ? `Cargo excluído; ${reassignedCount} usuário(s) foram reatribuídos e a operação foi registrada na auditoria.`
+        : 'Cargo excluído e operação registrada na auditoria.')
+      await load()
+    } catch (deleteError) {
+      setError(deleteError instanceof Error ? deleteError.message : 'Não foi possível excluir o cargo.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
   async function updateMember(member: Member, patch: { roleName?: string; status?: string }) {
     setError('')
     setNotice('')
@@ -302,7 +353,7 @@ export function RoleManagementWorkspace({ initialView = 'roles' }: { initialView
         <aside className="h-fit rounded-xl border border-white/[0.07] bg-[#11161e] p-3">
           <h2 className="px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Cargos ({roles.length})</h2>
           <div className="space-y-1">{roles.map((item) => <button key={item.id} onClick={() => selectRole(item.id)} className={`w-full rounded-lg px-3 py-3 text-left ${selectedRole === item.id && !creatingRole ? 'bg-blue-500/10 text-blue-200' : 'text-slate-300 hover:bg-white/[0.04]'}`}>
-            <span className="flex items-center justify-between gap-2 text-sm font-medium"><span className="truncate">{item.name}</span>{item.name.toLowerCase() === 'admin' && <span className="rounded bg-amber-400/10 px-1.5 py-0.5 text-[9px] uppercase text-amber-300">Protegido</span>}</span>
+            <span className="flex items-center justify-between gap-2 text-sm font-medium"><span className="truncate">{item.name}</span>{item.is_system && <span className="rounded bg-amber-400/10 px-1.5 py-0.5 text-[9px] uppercase text-amber-300">{item.name.toLowerCase() === 'admin' ? 'Protegido' : 'Sistema'}</span>}</span>
             <span className="mt-1 block text-[11px] text-slate-500">{item.memberCount} usuário(s) · {item.is_active ? 'Ativo' : 'Inativo'}</span>
           </button>)}
             {creatingRole && <div className="rounded-lg bg-blue-500/10 px-3 py-3 text-sm font-medium text-blue-200">Novo cargo</div>}
@@ -337,7 +388,7 @@ export function RoleManagementWorkspace({ initialView = 'roles' }: { initialView
                 </section>
               })}
             </div>
-            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-white/[0.06] pt-4"><p className="text-[11px] text-slate-600">{role?.memberCount ?? 0} usuário(s) · alterações são registradas na auditoria</p><button disabled={saving || role?.name.toLowerCase() === 'admin'} className="flex items-center gap-2 rounded-lg bg-blue-500 px-4 py-2.5 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40">{saving ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}{creatingRole ? 'Criar cargo' : 'Salvar permissões'}</button></div>
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-white/[0.06] pt-4"><p className="text-[11px] text-slate-600">{role?.memberCount ?? 0} usuário(s) · alterações são registradas na auditoria</p><div className="flex flex-wrap gap-2">{!creatingRole && role && !role.is_system && <button type="button" disabled={saving} onClick={() => { setDeletingRole(role); setReassignRoleId(''); setError(''); setNotice('') }} className="flex items-center gap-2 rounded-lg border border-rose-500/25 px-3 py-2.5 text-xs font-semibold text-rose-300 hover:bg-rose-500/10 disabled:cursor-not-allowed disabled:opacity-40"><Trash2 className="size-3.5" />Excluir cargo</button>}<button disabled={saving || role?.name.toLowerCase() === 'admin'} className="flex items-center gap-2 rounded-lg bg-blue-500 px-4 py-2.5 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40">{saving ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}{creatingRole ? 'Criar cargo' : 'Salvar permissões'}</button></div></div>
           </> : <p className="p-8 text-sm text-slate-500">Selecione um cargo para consultar sua matriz.</p>}
         </form>
       </div> : <div className="space-y-4">
@@ -384,5 +435,15 @@ export function RoleManagementWorkspace({ initialView = 'roles' }: { initialView
           <div className="mt-6 flex justify-end gap-2"><button type="button" onClick={() => setMemberDetails(null)} className="rounded-lg px-3 py-2 text-xs text-slate-300">Fechar</button><button type="button" disabled={memberDetails.user_id === currentUserId} onClick={() => { setEditingMember(memberDetails); setMemberDetails(null) }} className="inline-flex items-center gap-1.5 rounded-lg bg-blue-500 px-3 py-2 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40"><Pencil className="size-3.5" />Editar</button></div>
         </section>
       </div>}
+    {deletingRole && <div className="fixed inset-0 z-50 grid place-items-center bg-black/70 p-4" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !saving) setDeletingRole(null) }}>
+      <section role="dialog" aria-modal="true" aria-labelledby="delete-role-title" className="w-full max-w-lg rounded-xl border border-white/[0.08] bg-[#11161e] p-5 shadow-2xl">
+        <div className="flex items-start justify-between gap-4"><div><p className="text-xs uppercase tracking-wider text-rose-300">Exclusão de cargo</p><h2 id="delete-role-title" className="mt-1 text-lg font-semibold text-white">Excluir “{deletingRole.name}”?</h2></div><button type="button" disabled={saving} onClick={() => setDeletingRole(null)} aria-label="Fechar confirmação" className="disabled:opacity-40"><X className="size-5 text-slate-400" /></button></div>
+        <p className="mt-3 text-sm text-slate-400">{deletingRole.memberCount > 0
+          ? `${deletingRole.memberCount} usuário(s) estão vinculados a este cargo. Selecione um cargo ativo para reatribuí-los antes de excluir.`
+          : 'A operação será bloqueada se houver usuários vinculados. Caso existam vínculos não exibidos, você poderá selecionar um cargo de destino.'}</p>
+        {deletingRole.memberCount > 0 && <label className="mt-4 block text-xs text-slate-500">Reatribuir usuários para<select value={reassignRoleId} onChange={(event) => { setReassignRoleId(event.target.value); setError('') }} className={inputClass}><option value="">Selecione um cargo ativo</option>{roles.filter((item) => item.is_active && item.id !== deletingRole.id).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>}
+        <div className="mt-6 flex justify-end gap-2"><button type="button" disabled={saving} onClick={() => setDeletingRole(null)} className="rounded-lg border border-white/[0.08] px-3 py-2 text-xs text-slate-300 disabled:opacity-40">Cancelar</button><button type="button" disabled={saving || (deletingRole.memberCount > 0 && !reassignRoleId)} onClick={() => void deleteRole()} className="inline-flex items-center gap-2 rounded-lg bg-rose-500 px-3 py-2 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40">{saving ? <Loader2 className="size-3.5 animate-spin" /> : <Trash2 className="size-3.5" />}Confirmar exclusão</button></div>
+      </section>
+    </div>}
   </section>
 }

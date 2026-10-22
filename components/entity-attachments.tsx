@@ -8,7 +8,7 @@ import { Download, ExternalLink, Loader2, Paperclip, Trash2, Upload } from 'luci
 type Attachment = { id: string; file_name: string; storage_path: string; mime_type: string; file_size: number; uploaded_by: string | null; created_at: string }
 type TeamMember = { id: string; user_id: string | null; full_name: string }
 
-export function EntityAttachments({ entityType, entityId, canUpload = true }: { entityType: string; entityId: string; canUpload?: boolean }) {
+export function EntityAttachments({ entityType, entityId, canUpload = true, canDownload = true, canDelete = true }: { entityType: string; entityId: string; canUpload?: boolean; canDownload?: boolean; canDelete?: boolean }) {
   const [items, setItems] = useState<Attachment[]>([])
   const [loading, setLoading] = useState(true)
   const [uploading, setUploading] = useState(false)
@@ -50,14 +50,22 @@ export function EntityAttachments({ entityType, entityId, canUpload = true }: { 
     }
   }
 
-  useEffect(() => { void load() }, [entityId, entityType])
+  useEffect(() => {
+    if (!canDownload) {
+      setItems([])
+      setLoading(false)
+      setMessage('Seu cargo não tem permissão para visualizar anexos.')
+      return
+    }
+    void load()
+  }, [canDownload, entityId, entityType])
 
   async function upload(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0]
     event.target.value = ''
     if (!file) return
     if (!canUpload) { setMessage('Seu cargo não tem permissão para enviar anexos.'); return }
-    if (file.size > 10 * 1024 * 1024) { setMessage('O arquivo deve ter no máximo 10 MB.'); return }
+    if (file.size < 1 || file.size > 10 * 1024 * 1024) { setMessage('O arquivo deve ter conteúdo e no máximo 10 MB.'); return }
     if (entityType === 'contract' && ((file.type && file.type !== 'application/pdf') || !file.name.toLowerCase().endsWith('.pdf'))) { setMessage('Selecione um arquivo PDF para anexar ao contrato.'); return }
     if (!file.name.trim() || (file.type && !/^[\w!#$&^_.+-]+\/[\w!#$&^_.+-]+$/.test(file.type))) { setMessage('O tipo ou nome do arquivo não é válido.'); return }
     setUploading(true); setMessage('')
@@ -78,26 +86,44 @@ export function EntityAttachments({ entityType, entityId, canUpload = true }: { 
       return
     }
     const safeName = file.name.trim().replace(/[^a-zA-Z0-9._-]/g, '_')
-    const storagePath = `${entityType}/${entityId}/${safeName}`
-    const previous = await supabase.from('entity_attachments').select('id,storage_path').eq('entity_type', entityType).eq('entity_id', entityId).eq('file_name', file.name)
-    const previousItems = (previous.data ?? []) as { id: string; storage_path: string }[]
-    if (previousItems.length) {
-      await supabase.storage.from('private-documents').remove(previousItems.map((item) => item.storage_path))
-      await supabase.from('entity_attachments').delete().in('id', previousItems.map((item) => item.id))
-    }
-    const uploadResult = await supabase.storage.from('private-documents').upload(storagePath, file, { contentType: file.type || 'application/octet-stream', upsert: true })
-    if (uploadResult.error) { setMessage(uploadResult.error.message); setUploading(false); return }
-    const insertResult = await supabase.from('entity_attachments').insert({ entity_type: entityType, entity_id: entityId, file_name: file.name, storage_path: storagePath, mime_type: file.type || 'application/octet-stream', file_size: file.size, uploaded_by: userData.user.id })
-    if (insertResult.error) {
-      const { error: cleanupError } = await supabase.storage.from('private-documents').remove([storagePath])
-      setMessage(cleanupError ? `Não foi possível registrar o anexo (${insertResult.error.message}) nem remover o arquivo enviado (${cleanupError.message}).` : insertResult.error.message)
+    const storagePath = `${userData.user.id}/${entityType}/${entityId}/${crypto.randomUUID()}-${safeName.slice(0, 160) || 'arquivo'}`
+    let uploaded = false
+    try {
+      const uploadResult = await supabase.storage.from('private-documents').upload(storagePath, file, { contentType: file.type || 'application/octet-stream', upsert: false })
+      if (uploadResult.error) {
+        setMessage(uploadResult.error.message)
+        return
+      }
+      uploaded = true
+      const insertResult = await supabase.from('entity_attachments').insert({ entity_type: entityType, entity_id: entityId, file_name: file.name, storage_path: storagePath, mime_type: file.type || 'application/octet-stream', file_size: file.size, uploaded_by: userData.user.id })
+      if (insertResult.error) {
+        const { error: cleanupError } = await supabase.storage.from('private-documents').remove([storagePath])
+        uploaded = Boolean(cleanupError)
+        setMessage(cleanupError
+          ? `Não foi possível registrar o anexo (${insertResult.error.message}) nem remover o arquivo enviado (${cleanupError.message}).`
+          : insertResult.error.message)
+        return
+      }
+      uploaded = false
+      setMessage('Anexo enviado.')
+      await load()
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Não foi possível enviar o anexo.'
+      if (uploaded) {
+        const { error: cleanupError } = await supabase.storage.from('private-documents').remove([storagePath])
+        setMessage(cleanupError
+          ? `${message} O arquivo enviado também não pôde ser removido (${cleanupError.message}).`
+          : message)
+      } else {
+        setMessage(message)
+      }
+    } finally {
       setUploading(false)
-      return
     }
-    setMessage('Anexo enviado.'); await load(); setUploading(false)
   }
 
   async function download(item: Attachment) {
+    if (!canDownload) { setMessage('Seu cargo não tem permissão para abrir anexos.'); return }
     if (entityType === 'contract') {
       window.open(`/api/workspace/contracts/${entityId}/attachments/${item.id}`, '_blank', 'noopener,noreferrer')
       return
@@ -108,6 +134,7 @@ export function EntityAttachments({ entityType, entityId, canUpload = true }: { 
   }
 
   async function remove(item: Attachment) {
+    if (!canDelete) { setMessage('Seu cargo não tem permissão para excluir anexos.'); return }
     if (!window.confirm(`Excluir “${item.file_name}”?`)) return
     const { error: storageError } = await supabase.storage.from('private-documents').remove([item.storage_path])
     if (storageError) { setMessage(storageError.message); return }
@@ -135,7 +162,7 @@ export function EntityAttachments({ entityType, entityId, canUpload = true }: { 
           <div className="flex shrink-0 gap-1">
             {previewUrl ? <a href={previewUrl} target="_blank" rel="noopener noreferrer" aria-label={`Visualizar ${item.file_name}`} title="Visualizar arquivo" className="rounded p-2 text-slate-400 hover:bg-white/5 hover:text-white"><ExternalLink className="size-4" /></a> : <button type="button" onClick={() => void download(item)} aria-label={`Abrir ${item.file_name}`} className="rounded p-2 text-slate-400 hover:bg-white/5 hover:text-white"><ExternalLink className="size-4" /></button>}
             {downloadUrl ? <a href={downloadUrl} aria-label={`Baixar ${item.file_name}`} title="Baixar arquivo" className="rounded p-2 text-slate-400 hover:bg-white/5 hover:text-white"><Download className="size-4" /></a> : <button type="button" onClick={() => void download(item)} aria-label={`Baixar ${item.file_name}`} className="rounded p-2 text-slate-400 hover:bg-white/5 hover:text-white"><Download className="size-4" /></button>}
-            <button type="button" onClick={() => void remove(item)} aria-label={`Excluir ${item.file_name}`} className="rounded p-2 text-slate-400 hover:bg-rose-500/10 hover:text-rose-300"><Trash2 className="size-4" /></button>
+            {canDelete && <button type="button" onClick={() => void remove(item)} aria-label={`Excluir ${item.file_name}`} className="rounded p-2 text-slate-400 hover:bg-rose-500/10 hover:text-rose-300"><Trash2 className="size-4" /></button>}
           </div>
         </div>
       })}

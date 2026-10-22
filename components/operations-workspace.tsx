@@ -8,7 +8,8 @@ import { hasWorkspaceAccess } from '@/lib/workspace-access'
 
 type Module = 'projects' | 'change_requests' | 'support_tickets'
 type ChangeRequest = { id: string; title: string; requester: string; description: string | null; status: string; priority: string; category: string; effort_hours: number }
-type Ticket = { id: string; ticket_number: string; subject: string; requester: string; description: string | null; status: string; priority: string; category: string; due_at: string | null; scheduled_at: string | null; resolution: string | null; resolved_at: string | null }
+type Ticket = { id: string; ticket_number: string; subject: string; requester: string; description: string | null; status: string; priority: string; category: string; sector: string; technical_responsible_id: string | null; due_at: string | null; scheduled_at: string | null; resolution: string | null; resolved_at: string | null }
+type Member = { id: string; full_name: string; role_name: string }
 type OperationalRecord = ChangeRequest | Ticket
 
 const modules = [
@@ -18,6 +19,15 @@ const modules = [
 ] as const
 const inputClass = 'w-full rounded-lg border border-white/10 bg-[#151b24] p-3 text-sm text-white'
 const supportStatuses = ['Aberto', 'Em andamento', 'Aguardando cliente', 'Resolvido', 'Fechado']
+const supportSectors = ['Suporte Técnico', 'Financeiro', 'Comercial', 'Operações']
+
+function rolesForSector(sector: string) {
+  if (sector === 'Suporte Técnico') return ['suporte']
+  if (sector === 'Financeiro') return ['financeiro']
+  if (sector === 'Comercial') return ['comercial']
+  if (sector === 'Operações') return ['operacional']
+  return []
+}
 
 function toLocalDateTime(value: string | null) {
   if (!value) return ''
@@ -37,7 +47,14 @@ export function OperationsWorkspace({ initialModule = 'projects', permissions }:
   const [module, setModule] = useState<Module>(initialModule)
   const [requests, setRequests] = useState<ChangeRequest[]>([])
   const [tickets, setTickets] = useState<Ticket[]>([])
+  const [members, setMembers] = useState<Member[]>([])
   const [query, setQuery] = useState('')
+  const [categoryFilter, setCategoryFilter] = useState('')
+  const [sectorFilter, setSectorFilter] = useState('')
+  const [statusFilter, setStatusFilter] = useState('')
+  const [priorityFilter, setPriorityFilter] = useState('')
+  const [responsibleFilter, setResponsibleFilter] = useState('')
+  const [editingSector, setEditingSector] = useState('')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [modal, setModal] = useState(false)
@@ -48,11 +65,17 @@ export function OperationsWorkspace({ initialModule = 'projects', permissions }:
   const canCreate = permissions.includes('*') || permissions.includes(`${permissionModule}:create`)
   const canUpdate = permissions.includes('*') || permissions.includes(`${permissionModule}:update`)
   const canDelete = permissions.includes('*') || permissions.includes(`${permissionModule}:delete`)
+  const canAssign = permissions.includes('*') || permissions.includes('support:assign')
   const availableModules = modules.filter(([key]) => hasWorkspaceAccess(permissions, key === 'support_tickets' ? 'suporte' : key === 'change_requests' ? 'solicitacoes' : 'projetos'))
 
   useEffect(() => {
     setModule(initialModule)
     setQuery('')
+    setCategoryFilter('')
+    setSectorFilter('')
+    setStatusFilter('')
+    setPriorityFilter('')
+    setResponsibleFilter('')
     setError('')
     setModal(false)
     setRecord(null)
@@ -70,10 +93,20 @@ export function OperationsWorkspace({ initialModule = 'projects', permissions }:
       else setRequests((data ?? []) as ChangeRequest[])
     } else {
       const { data, error: queryError } = await supabase.from('support_tickets')
-        .select('id,ticket_number,subject,requester,description,status,priority,category,due_at,scheduled_at,resolution,resolved_at')
+        .select('id,ticket_number,subject,requester,description,status,priority,category,sector,technical_responsible_id,due_at,scheduled_at,resolution,resolved_at')
         .order('created_at', { ascending: false })
       if (queryError) setError(`Não foi possível carregar os chamados: ${queryError.message}`)
       else setTickets((data ?? []) as Ticket[])
+      if (canAssign) {
+        const { data: memberRows, error: membersError } = await supabase.from('team_members')
+          .select('id,full_name,role_name')
+          .eq('status', 'Ativo')
+          .order('full_name')
+        if (membersError) setError((current) => current || `Não foi possível carregar os responsáveis: ${membersError.message}`)
+        else setMembers((memberRows ?? []) as Member[])
+      } else {
+        setMembers([])
+      }
     }
     setLoading(false)
   }
@@ -82,7 +115,25 @@ export function OperationsWorkspace({ initialModule = 'projects', permissions }:
 
   const operationalRows: OperationalRecord[] = module === 'change_requests'
     ? requests.filter((item) => `${item.title} ${item.requester} ${item.category}`.toLowerCase().includes(query.toLowerCase()))
-    : tickets.filter((item) => `${item.ticket_number} ${item.subject} ${item.requester}`.toLowerCase().includes(query.toLowerCase()))
+    : tickets.filter((item) =>
+        `${item.ticket_number} ${item.subject} ${item.requester} ${item.category} ${item.sector}`.toLowerCase().includes(query.toLowerCase())
+        && (!categoryFilter || item.category === categoryFilter)
+        && (!sectorFilter || item.sector === sectorFilter)
+        && (!statusFilter || item.status === statusFilter)
+        && (!priorityFilter || item.priority === priorityFilter)
+        && (!responsibleFilter || item.technical_responsible_id === responsibleFilter))
+
+  function membersForSector(sector: string) {
+    const allowedRoles = rolesForSector(sector)
+    return members.filter((member) => allowedRoles.includes(member.role_name.trim().toLowerCase()))
+  }
+
+  function openEditor(item: OperationalRecord) {
+    setRecord(item)
+    setEditingRecord(true)
+    setEditingSector('sector' in item ? item.sector : '')
+    setError('')
+  }
 
   async function remove(id: string) {
     if (!canDelete || !window.confirm('Excluir este registro?')) return
@@ -98,17 +149,6 @@ export function OperationsWorkspace({ initialModule = 'projects', permissions }:
     setSaving(true)
     setError('')
     const data = Object.fromEntries(new FormData(event.currentTarget).entries())
-    let technicalResponsibleId: string | null = null
-    if (module === 'support_tickets') {
-      const { data: memberId, error: memberError } = await createClient().rpc('current_team_member_id')
-      if (memberError || !memberId) {
-        console.error('Support ticket assignee lookup failed:', memberError?.message ?? 'No active team member')
-        setError('Não foi possível identificar seu membro ativo para atribuir o chamado.')
-        setSaving(false)
-        return
-      }
-      technicalResponsibleId = memberId
-    }
     const payload = module === 'change_requests'
       ? { requester: data.requester, title: data.title, description: data.description, category: data.category || 'Nova funcionalidade', priority: data.priority || 'Média' }
       : {
@@ -117,13 +157,13 @@ export function OperationsWorkspace({ initialModule = 'projects', permissions }:
           subject: data.subject,
           description: data.description,
           category: data.category || 'Suporte corretivo',
+          sector: data.sector,
           priority: data.priority || 'Média',
           status: data.status || 'Aberto',
           due_at: toIsoDateTime(data.due_at),
           scheduled_at: toIsoDateTime(data.scheduled_at),
           resolution: data.resolution || null,
           resolved_at: ['Resolvido', 'Fechado'].includes(String(data.status)) ? new Date().toISOString() : null,
-          technical_responsible_id: technicalResponsibleId,
         }
     const table = module === 'change_requests' ? 'change_requests' : 'support_tickets'
     const { error: insertError } = await createClient().from(table).insert(payload)
@@ -153,12 +193,14 @@ export function OperationsWorkspace({ initialModule = 'projects', permissions }:
           requester: data.requester,
           description: data.description || null,
           category: data.category,
+          sector: data.sector,
           priority: data.priority,
           status: data.status,
           due_at: toIsoDateTime(data.due_at),
           scheduled_at: toIsoDateTime(data.scheduled_at),
           resolution: data.resolution || null,
           resolved_at: isResolved ? (wasResolved ? previousTicket.resolved_at : new Date().toISOString()) : null,
+          ...(canAssign ? { technical_responsible_id: data.technical_responsible_id || null } : {}),
         }
       : { title: data.title, requester: data.requester, description: data.description || null, category: data.category, priority: data.priority, status: data.status }
     const table = module === 'change_requests' ? 'change_requests' : 'support_tickets'
@@ -179,17 +221,24 @@ export function OperationsWorkspace({ initialModule = 'projects', permissions }:
   return <section className="mt-6 rounded-xl border border-white/[0.07] bg-[#11161e]">
     <div className="flex flex-col gap-4 border-b border-white/[0.07] p-5 lg:flex-row lg:items-center lg:justify-between">
       <div><p className="text-xs font-medium uppercase tracking-[0.16em] text-cyan-400">Operação e entrega</p><h2 className="mt-1 text-lg font-semibold text-white">{title}</h2><p className="mt-1 text-xs text-slate-500">Acompanhe a execução da software house em um único lugar.</p></div>
-      <div className="flex flex-wrap gap-2">{availableModules.map(([key, Icon, label]) => <button key={key} onClick={() => { setModule(key); setQuery(''); setError(''); setModal(false); setRecord(null) }} className={`flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-medium ${module === key ? 'bg-cyan-500 text-slate-950' : 'bg-white/[0.04] text-slate-400 hover:text-white'}`}><Icon className="size-3.5" />{label}</button>)}{canCreate && <button onClick={() => setModal(true)} className="flex items-center gap-2 rounded-lg bg-white px-3 py-2 text-xs font-semibold text-slate-900 hover:bg-slate-200"><Plus className="size-3.5" />Novo registro</button>}</div>
+      <div className="flex flex-wrap gap-2">{availableModules.map(([key, Icon, label]) => <button key={key} onClick={() => { setModule(key); setQuery(''); setCategoryFilter(''); setSectorFilter(''); setStatusFilter(''); setPriorityFilter(''); setResponsibleFilter(''); setError(''); setModal(false); setRecord(null) }} className={`flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-medium ${module === key ? 'bg-cyan-500 text-slate-950' : 'bg-white/[0.04] text-slate-400 hover:text-white'}`}><Icon className="size-3.5" />{label}</button>)}{canCreate && <button onClick={() => setModal(true)} className="flex items-center gap-2 rounded-lg bg-white px-3 py-2 text-xs font-semibold text-slate-900 hover:bg-slate-200"><Plus className="size-3.5" />Novo registro</button>}</div>
     </div>
-    <div className="flex items-center gap-3 border-b border-white/[0.07] px-5 py-3"><div className="flex flex-1 items-center gap-2 rounded-lg border border-white/[0.08] bg-white/[0.025] px-3 py-2"><Search className="size-4 text-slate-600" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Pesquisar registros..." className="w-full bg-transparent text-xs text-slate-200 outline-none placeholder:text-slate-600" /></div><button onClick={() => void loadData()} className="rounded-lg border border-white/[0.08] px-3 py-2 text-xs text-slate-400 hover:text-white">Atualizar</button></div>
+    <div className="flex flex-wrap items-center gap-3 border-b border-white/[0.07] px-5 py-3"><div className="flex min-w-48 flex-1 items-center gap-2 rounded-lg border border-white/[0.08] bg-white/[0.025] px-3 py-2"><Search className="size-4 text-slate-600" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Pesquisar registros..." className="w-full bg-transparent text-xs text-slate-200 outline-none placeholder:text-slate-600" /></div>{module === 'support_tickets' && <>
+      <select aria-label="Filtrar por categoria" value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)} className={`${inputClass} w-auto min-w-36 py-2 text-xs`}><option value="">Todas categorias</option>{Array.from(new Set(tickets.map((ticket) => ticket.category))).map((category) => <option key={category}>{category}</option>)}</select>
+      <select aria-label="Filtrar por setor" value={sectorFilter} onChange={(event) => setSectorFilter(event.target.value)} className={`${inputClass} w-auto min-w-36 py-2 text-xs`}><option value="">Todos os setores</option>{supportSectors.map((sector) => <option key={sector}>{sector}</option>)}</select>
+      <select aria-label="Filtrar por status" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} className={`${inputClass} w-auto min-w-36 py-2 text-xs`}><option value="">Todos os status</option>{supportStatuses.map((status) => <option key={status}>{status}</option>)}</select>
+      <select aria-label="Filtrar por prioridade" value={priorityFilter} onChange={(event) => setPriorityFilter(event.target.value)} className={`${inputClass} w-auto min-w-32 py-2 text-xs`}><option value="">Todas prioridades</option>{['Baixa', 'Média', 'Alta', 'Urgente'].map((priority) => <option key={priority}>{priority}</option>)}</select>
+      <select aria-label="Filtrar por responsável" value={responsibleFilter} onChange={(event) => setResponsibleFilter(event.target.value)} className={`${inputClass} w-auto min-w-36 py-2 text-xs`}><option value="">Todos responsáveis</option>{Array.from(new Set(tickets.map((ticket) => ticket.technical_responsible_id).filter((id): id is string => Boolean(id)))).map((id) => <option key={id} value={id}>{members.find((member) => member.id === id)?.full_name ?? id}</option>)}</select>
+    </>}<button onClick={() => void loadData()} className="rounded-lg border border-white/[0.08] px-3 py-2 text-xs text-slate-400 hover:text-white">Atualizar</button></div>
     {error && <div className="mx-5 mt-4 flex items-center justify-between rounded-lg border border-amber-400/20 bg-amber-400/5 px-3 py-2 text-xs text-amber-300"><span>{error}</span><button onClick={() => setError('')} aria-label="Fechar aviso"><X className="size-3.5" /></button></div>}
     <div className="overflow-x-auto">{loading ? <div className="flex min-h-40 items-center justify-center text-xs text-slate-500"><Loader2 className="mr-2 size-4 animate-spin" />Carregando operação...</div> : operationalRows.length === 0 ? <div className="flex min-h-40 flex-col items-center justify-center text-center"><p className="text-sm text-slate-400">{empty}</p><p className="mt-1 text-xs text-slate-600">{canCreate ? 'Use “Novo registro” para começar.' : 'Nenhum registro encontrado.'}</p></div> : <table className="w-full text-left text-xs">
-      <thead className="border-b border-white/[0.07] text-[10px] uppercase tracking-wider text-slate-600"><tr>{module === 'change_requests' ? <><th className="px-5 py-3">Solicitação</th><th className="px-5 py-3">Solicitante</th><th className="px-5 py-3">Status</th></> : <><th className="px-5 py-3">Chamado</th><th className="px-5 py-3">Solicitante</th><th className="px-5 py-3">Status</th></>}<th className="px-5 py-3 text-right">Ações</th></tr></thead>
+      <thead className="border-b border-white/[0.07] text-[10px] uppercase tracking-wider text-slate-600"><tr>{module === 'change_requests' ? <><th className="px-5 py-3">Solicitação</th><th className="px-5 py-3">Solicitante</th><th className="px-5 py-3">Status</th></> : <><th className="px-5 py-3">Chamado</th><th className="px-5 py-3">Categoria</th><th className="px-5 py-3">Setor</th><th className="px-5 py-3">Responsável</th><th className="px-5 py-3">Solicitante</th><th className="px-5 py-3">Status</th></>}<th className="px-5 py-3 text-right">Ações</th></tr></thead>
       <tbody>{operationalRows.map((item) => <tr key={item.id} className="border-b border-white/[0.05] last:border-0">
         <td className="px-5 py-3 font-medium text-slate-200">{'ticket_number' in item ? `${item.ticket_number} · ${item.subject}` : item.title}</td>
+        {'ticket_number' in item && <><td className="px-5 py-3 text-slate-400">{item.category}</td><td className="px-5 py-3 text-slate-400">{item.sector}</td><td className="px-5 py-3 text-slate-400">{members.find((member) => member.id === item.technical_responsible_id)?.full_name ?? item.technical_responsible_id ?? '—'}</td></>}
         <td className="px-5 py-3 text-slate-400">{item.requester}</td>
         <td className="px-5 py-3 text-slate-500">{item.status}</td>
-        <td className="px-5 py-3 text-right"><div className="inline-flex gap-1"><button onClick={() => { setRecord(item); setEditingRecord(false); setError('') }} aria-label="Ver detalhes" className="rounded p-1.5 text-slate-400 hover:bg-white/5 hover:text-white"><Eye className="size-3.5" /></button>{canUpdate && <button onClick={() => { setRecord(item); setEditingRecord(true); setError('') }} aria-label="Editar registro" className="rounded p-1.5 text-slate-400 hover:bg-white/5 hover:text-white"><Pencil className="size-3.5" /></button>}{canDelete && <button onClick={() => void remove(item.id)} aria-label="Excluir registro" className="rounded p-1.5 text-slate-600 hover:bg-rose-500/10 hover:text-rose-300"><Trash2 className="size-3.5" /></button>}</div></td>
+        <td className="px-5 py-3 text-right"><div className="inline-flex gap-1"><button onClick={() => { setRecord(item); setEditingRecord(false); setError('') }} aria-label="Ver detalhes" className="rounded p-1.5 text-slate-400 hover:bg-white/5 hover:text-white"><Eye className="size-3.5" /></button>{canUpdate && <button onClick={() => openEditor(item)} aria-label="Editar registro" className="rounded p-1.5 text-slate-400 hover:bg-white/5 hover:text-white"><Pencil className="size-3.5" /></button>}{canDelete && <button onClick={() => void remove(item.id)} aria-label="Excluir registro" className="rounded p-1.5 text-slate-600 hover:bg-rose-500/10 hover:text-rose-300"><Trash2 className="size-3.5" /></button>}</div></td>
       </tr>)}</tbody>
     </table>}</div>
     {modal && <div className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-black/70 p-4"><div className="w-full max-w-2xl rounded-xl border border-white/10 bg-[#151b24] p-5 shadow-2xl">
@@ -206,6 +255,7 @@ export function OperationsWorkspace({ initialModule = 'projects', permissions }:
           <label className="text-xs text-slate-400">Solicitante<input required name="requester" className={`${inputClass} mt-1.5`} /></label>
           <label className="text-xs text-slate-400 sm:col-span-2">Assunto<input required name="subject" className={`${inputClass} mt-1.5`} /></label>
           <label className="text-xs text-slate-400">Categoria<select name="category" className={`${inputClass} mt-1.5`}><option>Suporte corretivo</option><option>Dúvida</option><option>Solicitação</option></select></label>
+          <label className="text-xs text-slate-400">Setor responsável<select required name="sector" defaultValue="" className={`${inputClass} mt-1.5`}><option value="" disabled>Selecione o setor</option>{supportSectors.map((sector) => <option key={sector}>{sector}</option>)}</select></label>
           <label className="text-xs text-slate-400">Prioridade<select name="priority" className={`${inputClass} mt-1.5`}><option>Média</option><option>Baixa</option><option>Alta</option><option>Urgente</option></select></label>
           <label className="text-xs text-slate-400">Status<select name="status" defaultValue="Aberto" className={`${inputClass} mt-1.5`}>{supportStatuses.map((status) => <option key={status}>{status}</option>)}</select></label>
           <label className="text-xs text-slate-400">Prazo<input name="due_at" type="datetime-local" className={`${inputClass} mt-1.5`} /></label>
@@ -222,6 +272,8 @@ export function OperationsWorkspace({ initialModule = 'projects', permissions }:
         {'ticket_number' in record ? <label className="text-xs text-slate-400">Assunto<input name="subject" required defaultValue={record.subject} className={`${inputClass} mt-1`} /></label> : <label className="text-xs text-slate-400">Título<input name="title" required defaultValue={record.title} className={`${inputClass} mt-1`} /></label>}
         <label className="text-xs text-slate-400">Solicitante<input name="requester" required defaultValue={record.requester} className={`${inputClass} mt-1`} /></label>
         <label className="text-xs text-slate-400">Categoria<input name="category" required defaultValue={record.category} className={`${inputClass} mt-1`} /></label>
+        {'ticket_number' in record && <label className="text-xs text-slate-400">Setor responsável<select name="sector" required value={editingSector} onChange={(event) => setEditingSector(event.target.value)} className={`${inputClass} mt-1`}>{supportSectors.map((sector) => <option key={sector}>{sector}</option>)}</select></label>}
+        {'ticket_number' in record && canAssign && <label className="text-xs text-slate-400">Responsável<select name="technical_responsible_id" defaultValue={record.technical_responsible_id ?? ''} className={`${inputClass} mt-1`}><option value="">Atribuição automática do setor</option>{membersForSector(editingSector).map((member) => <option key={member.id} value={member.id}>{member.full_name}</option>)}</select></label>}
         <label className="text-xs text-slate-400">Prioridade<select name="priority" defaultValue={record.priority} className={`${inputClass} mt-1`}><option>Baixa</option><option>Média</option><option>Alta</option><option>Urgente</option></select></label>
         {'ticket_number' in record
           ? <label className="text-xs text-slate-400">Status<select name="status" required defaultValue={record.status} className={`${inputClass} mt-1`}>{!supportStatuses.includes(record.status) && <option>{record.status}</option>}{supportStatuses.map((status) => <option key={status}>{status}</option>)}</select></label>
@@ -234,6 +286,8 @@ export function OperationsWorkspace({ initialModule = 'projects', permissions }:
         {'ticket_number' in record && <label className="text-xs text-slate-400 sm:col-span-2">Resolução<textarea name="resolution" defaultValue={record.resolution || ''} rows={4} className={`${inputClass} mt-1 resize-y`} /></label>}
         <div className="flex justify-end gap-2 sm:col-span-2"><button type="button" onClick={() => setEditingRecord(false)} className="rounded-lg px-3 py-2 text-xs text-slate-300">Cancelar</button><button disabled={saving} className="rounded-lg bg-cyan-500 px-4 py-2 text-xs font-semibold text-slate-950">{saving ? 'Salvando...' : 'Salvar alterações'}</button></div>
       </form> : <><div className="grid gap-4 text-sm sm:grid-cols-2"><p className="text-slate-400">Solicitante<span className="mt-1 block text-slate-200">{record.requester}</span></p><p className="text-slate-400">Status / prioridade<span className="mt-1 block text-slate-200">{record.status} · {record.priority}</span></p><p className="text-slate-400">Categoria<span className="mt-1 block text-slate-200">{record.category}</span></p>{'ticket_number' in record && <>
+        <p className="text-slate-400">Setor responsável<span className="mt-1 block text-slate-200">{record.sector}</span></p>
+        <p className="text-slate-400">Responsável<span className="mt-1 block text-slate-200">{members.find((member) => member.id === record.technical_responsible_id)?.full_name ?? record.technical_responsible_id ?? '—'}</span></p>
         <p className="text-slate-400">Prazo<span className="mt-1 block text-slate-200">{record.due_at ? new Date(record.due_at).toLocaleString('pt-BR') : 'Não definido'}</span></p>
         <p className="text-slate-400">Horário agendado<span className="mt-1 block text-slate-200">{record.scheduled_at ? new Date(record.scheduled_at).toLocaleString('pt-BR') : 'Não definido'}</span></p>
         <p className="text-slate-400">Resolvido em<span className="mt-1 block text-slate-200">{record.resolved_at ? new Date(record.resolved_at).toLocaleString('pt-BR') : '—'}</span></p>
@@ -241,7 +295,7 @@ export function OperationsWorkspace({ initialModule = 'projects', permissions }:
         <p className="whitespace-pre-wrap text-slate-300 sm:col-span-2">Resolução: {record.resolution || 'Ainda não informada.'}</p>
       </>}
       {'ticket_number' in record ? null : <p className="whitespace-pre-wrap text-slate-300 sm:col-span-2">{record.description || 'Sem descrição cadastrada.'}</p>}
-      </div><div className="mt-5 flex justify-end gap-2"><button type="button" onClick={() => setRecord(null)} className="rounded-lg px-3 py-2 text-xs text-slate-300">Fechar</button>{canUpdate && <button type="button" onClick={() => setEditingRecord(true)} className="inline-flex items-center gap-1.5 rounded-lg bg-cyan-500 px-3 py-2 text-xs font-semibold text-slate-950"><Pencil className="size-3.5" />Editar</button>}</div></>}
+      </div><div className="mt-5 flex justify-end gap-2"><button type="button" onClick={() => setRecord(null)} className="rounded-lg px-3 py-2 text-xs text-slate-300">Fechar</button>{canUpdate && <button type="button" onClick={() => { setEditingRecord(true); setEditingSector('sector' in record ? record.sector : '') }} className="inline-flex items-center gap-1.5 rounded-lg bg-cyan-500 px-3 py-2 text-xs font-semibold text-slate-950"><Pencil className="size-3.5" />Editar</button>}</div></>}
       {error && <p role="alert" className="mt-4 rounded-lg bg-amber-400/10 p-3 text-xs text-amber-300">{error}</p>}
     </div></div>}
   </section>

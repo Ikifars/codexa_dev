@@ -22,6 +22,7 @@ export const workspaceAccess: Record<string, string[]> = {
   usuarios: ['users:manage_users'],
   'papeis-e-permissoes': ['roles:manage_roles'],
   'meu-perfil': ['profile:view'],
+  'meu-historico': ['projects:view'],
   configuracoes: ['settings:view'],
   aparencia: ['appearance:view'],
   auditoria: ['audit:view_audit'],

@@ -94,8 +94,14 @@ function priorityTone(priority: string) {
   return 'border-white/[0.08] bg-white/[0.03] text-slate-300'
 }
 
-export function ProjectWorkspace({ projectId }: { projectId: string }) {
+export function ProjectWorkspace({ projectId, permissions }: { projectId: string; permissions: string[] }) {
   const supabase = useMemo(() => createClient(), [])
+  const canCreateTasks = permissions.includes('*') || permissions.includes('projects:create')
+  const canUpdateTasks = permissions.includes('*') || permissions.includes('projects:update')
+  const canDeleteTasks = permissions.includes('*') || permissions.includes('projects:delete')
+  const canEditProject = permissions.includes('*') || permissions.includes('projects:update')
+  const canDeleteProject = permissions.includes('*') || permissions.includes('projects:delete')
+  const canAssign = permissions.includes('*') || permissions.includes('projects:assign')
   const [project, setProject] = useState<Project | null>(null)
   const [tasks, setTasks] = useState<ProjectTask[]>([])
   const [members, setMembers] = useState<TeamMember[]>([])
@@ -108,7 +114,7 @@ export function ProjectWorkspace({ projectId }: { projectId: string }) {
   const [tab, setTab] = useState<Tab>('overview')
   const [taskFilter, setTaskFilter] = useState({ responsible: '', priority: '', deadline: '' })
   const [taskQuery, setTaskQuery] = useState('')
-  const [taskDate, setTaskDate] = useState(new Date().toISOString().slice(0, 10))
+  const [taskDate, setTaskDate] = useState('')
   const [editProjectOpen, setEditProjectOpen] = useState(false)
   const [taskModal, setTaskModal] = useState<{ open: boolean; task: ProjectTask | null; status: string }>({ open: false, task: null, status: 'Backlog' })
   const [taskSaving, setTaskSaving] = useState(false)
@@ -227,7 +233,7 @@ export function ProjectWorkspace({ projectId }: { projectId: string }) {
   const extraStatuses = [...new Set(tasks.map((task) => boardStatus(task.status)).filter((status) => !columns.some((column) => column.status === status) && status !== 'Cancelado'))]
 
   async function moveTask(task: ProjectTask, status: string) {
-    if (task.status === status || movingTaskId) return
+    if (!canUpdateTasks || task.status === status || movingTaskId) return
     const previousTasks = tasks
     setMovingTaskId(task.id)
     setError('')
@@ -246,6 +252,7 @@ export function ProjectWorkspace({ projectId }: { projectId: string }) {
 
   async function createTask(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
+    if (!canCreateTasks) return
     const data = new FormData(event.currentTarget)
     const id = crypto.randomUUID()
     setTaskSaving(true)
@@ -258,7 +265,7 @@ export function ProjectWorkspace({ projectId }: { projectId: string }) {
       status: taskModal.status,
       priority: String(data.get('priority') ?? 'Média'),
       due_date: String(data.get('due_date') ?? '') || null,
-      responsible_id: String(data.get('responsible_id') ?? '') || null,
+      responsible_id: canAssign ? String(data.get('responsible_id') ?? '') || null : null,
     })
     setTaskSaving(false)
     if (insertError) {
@@ -272,7 +279,7 @@ export function ProjectWorkspace({ projectId }: { projectId: string }) {
 
   async function updateTask(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (!taskModal.task) return
+    if (!taskModal.task || !canUpdateTasks) return
     const data = new FormData(event.currentTarget)
     const task = taskModal.task
     setTaskSaving(true)
@@ -283,7 +290,7 @@ export function ProjectWorkspace({ projectId }: { projectId: string }) {
       status: String(data.get('status') ?? task.status),
       priority: String(data.get('priority') ?? task.priority),
       due_date: String(data.get('due_date') ?? '') || null,
-      responsible_id: String(data.get('responsible_id') ?? '') || null,
+      ...(canAssign ? { responsible_id: String(data.get('responsible_id') ?? '') || null } : {}),
     }).eq('id', task.id).eq('project_id', projectId)
     setTaskSaving(false)
     if (updateError) {
@@ -297,7 +304,7 @@ export function ProjectWorkspace({ projectId }: { projectId: string }) {
 
   async function updateProject(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (!project) return
+    if (!project || !canEditProject) return
     const data = new FormData(event.currentTarget)
     setTaskSaving(true)
     setError('')
@@ -307,8 +314,10 @@ export function ProjectWorkspace({ projectId }: { projectId: string }) {
       status: String(data.get('status') ?? project.status),
       priority: String(data.get('priority') ?? project.priority),
       due_date: String(data.get('due_date') ?? '') || null,
-      responsible_id: String(data.get('responsible_id') ?? '') || null,
-      client_id: String(data.get('client_id') ?? '') || null,
+      ...(canAssign ? {
+        responsible_id: String(data.get('responsible_id') ?? '') || null,
+        client_id: String(data.get('client_id') ?? '') || null,
+      } : {}),
     }).eq('id', project.id)
     setTaskSaving(false)
     if (updateError) {
@@ -321,7 +330,7 @@ export function ProjectWorkspace({ projectId }: { projectId: string }) {
   }
 
   async function archiveProject() {
-    if (!project || !window.confirm(`Arquivar o projeto “${project.name}”?`)) return
+    if (!canEditProject || !project || !window.confirm(`Arquivar o projeto “${project.name}”?`)) return
     const { error: updateError } = await supabase.from('projects').update({ status: 'Arquivado' }).eq('id', project.id)
     if (updateError) {
       setError(updateError.message)
@@ -332,7 +341,7 @@ export function ProjectWorkspace({ projectId }: { projectId: string }) {
   }
 
   async function deleteProject() {
-    if (!project || !window.confirm(`Excluir permanentemente o projeto “${project.name}”?`)) return
+    if (!canDeleteProject || !project || !window.confirm(`Excluir permanentemente o projeto “${project.name}”?`)) return
     const { error: deleteError } = await supabase.from('projects').delete().eq('id', project.id)
     if (deleteError) {
       setError(deleteError.message)
@@ -362,6 +371,7 @@ export function ProjectWorkspace({ projectId }: { projectId: string }) {
 
   async function publishComment(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
+    if (!canUpdateTasks) return
     if (!taskModal.task || !currentUserId) {
       setCommentError('Entre novamente para publicar um comentário.')
       return
@@ -383,6 +393,7 @@ export function ProjectWorkspace({ projectId }: { projectId: string }) {
   }
 
   async function saveComment(comment: TaskComment, body: string) {
+    if (!canUpdateTasks) return
     const { error: updateError } = await supabase.from('task_comments').update({ body: body.trim(), updated_at: new Date().toISOString() }).eq('id', comment.id).eq('author_id', currentUserId)
     if (updateError) {
       setCommentError(updateError.message)
@@ -393,6 +404,7 @@ export function ProjectWorkspace({ projectId }: { projectId: string }) {
   }
 
   async function deleteComment(comment: TaskComment) {
+    if (!canUpdateTasks) return
     if (!window.confirm('Excluir seu comentário?')) return
     const { error: deleteError } = await supabase.from('task_comments').delete().eq('id', comment.id).eq('author_id', currentUserId)
     if (deleteError) {
@@ -403,7 +415,7 @@ export function ProjectWorkspace({ projectId }: { projectId: string }) {
   }
 
   async function deleteTask(task: ProjectTask) {
-    if (!window.confirm(`Excluir a tarefa “${task.title}”?`)) return
+    if (!canDeleteTasks || !window.confirm(`Excluir a tarefa “${task.title}”?`)) return
     const { error: deleteError } = await supabase.from('project_tasks').delete().eq('id', task.id).eq('project_id', projectId)
     if (deleteError) {
       setError(deleteError.message)
@@ -450,10 +462,10 @@ export function ProjectWorkspace({ projectId }: { projectId: string }) {
             </div>
           </div>
           <div className="flex shrink-0 flex-wrap gap-2">
-            <button onClick={() => { setTaskModal({ open: true, task: null, status: 'Backlog' }); setCommentItems([]) }} className="flex min-h-10 items-center gap-2 rounded-lg bg-blue-500 px-3.5 text-sm font-semibold text-white hover:bg-blue-400"><Plus className="size-4" />Adicionar tarefa</button>
-            <button onClick={() => setEditProjectOpen(true)} className="flex min-h-10 items-center gap-2 rounded-lg border border-white/[0.1] bg-white/[0.03] px-3 text-sm font-medium text-slate-200 hover:bg-white/[0.07]"><FileText className="size-4" />Editar</button>
-            <button onClick={() => void archiveProject()} disabled={normalize(project.status) === 'arquivado'} className="min-h-10 rounded-lg border border-white/[0.1] px-3 text-sm text-slate-400 hover:text-white disabled:opacity-50">Arquivar</button>
-            <button onClick={() => void deleteProject()} className="flex min-h-10 items-center gap-2 rounded-lg border border-rose-400/20 px-3 text-sm text-rose-200 hover:bg-rose-400/10"><Trash2 className="size-4" />Excluir</button>
+            {canCreateTasks && <button onClick={() => { setTaskModal({ open: true, task: null, status: 'Backlog' }); setCommentItems([]) }} className="flex min-h-10 items-center gap-2 rounded-lg bg-blue-500 px-3.5 text-sm font-semibold text-white hover:bg-blue-400"><Plus className="size-4" />Adicionar tarefa</button>}
+            {canEditProject && <><button onClick={() => setEditProjectOpen(true)} className="flex min-h-10 items-center gap-2 rounded-lg border border-white/[0.1] bg-white/[0.03] px-3 text-sm font-medium text-slate-200 hover:bg-white/[0.07]"><FileText className="size-4" />Editar</button>
+            <button onClick={() => void archiveProject()} disabled={normalize(project.status) === 'arquivado'} className="min-h-10 rounded-lg border border-white/[0.1] px-3 text-sm text-slate-400 hover:text-white disabled:opacity-50">Arquivar</button></>}
+            {canDeleteProject && <button onClick={() => void deleteProject()} className="flex min-h-10 items-center gap-2 rounded-lg border border-rose-400/20 px-3 text-sm text-rose-200 hover:bg-rose-400/10"><Trash2 className="size-4" />Excluir</button>}
           </div>
         </div>
         <div className="mt-6">
@@ -504,7 +516,7 @@ export function ProjectWorkspace({ projectId }: { projectId: string }) {
       {(tab === 'kanban' || tab === 'tasks') && <section className="space-y-4">
         <div className="flex flex-col gap-3 rounded-xl border border-white/[0.07] bg-[#11161e] p-4 lg:flex-row lg:items-center">
           <p className="mr-auto text-sm font-medium text-slate-300">{tab === 'kanban' ? 'Quadro de execução' : 'Lista detalhada de tarefas'}</p>
-          <label className="field flex items-center gap-2 lg:w-52"><Search className="size-3.5 text-slate-500" /><input value={taskQuery} onChange={(event) => setTaskQuery(event.target.value)} placeholder="Buscar tasks" className="min-w-0 flex-1 bg-transparent outline-none" aria-label="Buscar tasks" /></label><label className="field flex items-center gap-2"><span className="text-xs text-slate-500">Data</span><input type="date" value={taskDate} onChange={(event) => setTaskDate(event.target.value)} className="min-w-0 bg-transparent text-slate-200 outline-none" aria-label="Filtrar tasks por data" /></label><select value={taskFilter.responsible} onChange={(event) => setTaskFilter((current) => ({ ...current, responsible: event.target.value }))} className="field lg:w-52" aria-label="Filtrar tarefas por responsável"><option value="">Todos os responsáveis</option>{members.map((member) => <option key={member.user_id || member.id} value={member.user_id || member.id}>{member.full_name}</option>)}</select>
+          <label className="field flex items-center gap-2 lg:w-52"><Search className="size-3.5 text-slate-500" /><input value={taskQuery} onChange={(event) => setTaskQuery(event.target.value)} placeholder="Buscar tasks" className="min-w-0 flex-1 bg-transparent outline-none" aria-label="Buscar tasks" /></label>          <label className="field flex items-center gap-2"><span className="text-xs text-slate-500">Criada em</span><input type="date" value={taskDate} onChange={(event) => setTaskDate(event.target.value)} className="min-w-0 bg-transparent text-slate-200 outline-none" aria-label="Filtrar tarefas por data de criação" /></label><select value={taskFilter.responsible} onChange={(event) => setTaskFilter((current) => ({ ...current, responsible: event.target.value }))} className="field lg:w-52" aria-label="Filtrar tarefas por responsável"><option value="">Todos os responsáveis</option>{members.map((member) => <option key={member.user_id || member.id} value={member.user_id || member.id}>{member.full_name}</option>)}</select>
           <select value={taskFilter.priority} onChange={(event) => setTaskFilter((current) => ({ ...current, priority: event.target.value }))} className="field lg:w-44" aria-label="Filtrar tarefas por prioridade"><option value="">Todas as prioridades</option>{taskPriorityOptions.map((priority) => <option key={priority}>{priority}</option>)}</select>
           <select value={taskFilter.deadline} onChange={(event) => setTaskFilter((current) => ({ ...current, deadline: event.target.value }))} className="field lg:w-44" aria-label="Filtrar tarefas por prazo"><option value="">Todos os prazos</option><option value="overdue">Atrasadas</option><option value="has-date">Com prazo</option><option value="no-date">Sem prazo</option></select>
         </div>
@@ -513,17 +525,17 @@ export function ProjectWorkspace({ projectId }: { projectId: string }) {
             <div className="grid min-w-max grid-flow-col auto-cols-[minmax(260px,1fr)] gap-3 xl:auto-cols-[minmax(230px,1fr)]">
               {[...columns, ...extraStatuses.map((status) => ({ status, label: status })), ...(taskStatusCounts.has('Cancelado') ? [{ status: 'Cancelado', label: 'Canceladas' }] : [])].map((column) => {
                 const cards = taskCards(column.status)
-                return <section key={column.status} onDragOver={(event) => event.preventDefault()} onDrop={(event) => {
+                return <section key={column.status} onDragOver={(event) => { if (canUpdateTasks) event.preventDefault() }} onDrop={(event) => {
                   event.preventDefault()
                   const task = tasks.find((item) => item.id === event.dataTransfer.getData('text/plain'))
-                  if (task) void moveTask(task, column.status)
+                  if (canUpdateTasks && task) void moveTask(task, column.status)
                 }} className="flex min-h-[340px] flex-col rounded-xl border border-white/[0.07] bg-[#11161e]">
                   <div className="flex items-center justify-between border-b border-white/[0.07] px-3.5 py-3"><h3 className="text-sm font-semibold text-slate-200">{column.label}</h3><span className="min-w-6 rounded-md bg-white/[0.06] px-1.5 py-0.5 text-center text-xs tabular-nums text-slate-300">{cards.length}</span></div>
                   <div className="flex flex-1 flex-col gap-2 p-2.5">
                     {cards.map((task) => {
                       const member = task.responsible_id ? memberById.get(task.responsible_id) : undefined
                       const overdue = Boolean(task.due_date && task.due_date < new Date().toISOString().slice(0, 10) && !isComplete(task.status) && !isCanceled(task.status))
-                      return <article key={task.id} draggable={column.status !== 'Cancelado'} onDragStart={(event) => { event.dataTransfer.setData('text/plain', task.id); event.dataTransfer.effectAllowed = 'move' }} className={`rounded-lg border border-white/[0.08] bg-[#171d28] p-3 transition-colors hover:border-blue-400/30 ${movingTaskId === task.id ? 'opacity-50' : ''}`}>
+                      return <article key={task.id} draggable={canUpdateTasks && column.status !== 'Cancelado'} onDragStart={(event) => { if (!canUpdateTasks) return; event.dataTransfer.setData('text/plain', task.id); event.dataTransfer.effectAllowed = 'move' }} className={`rounded-lg border border-white/[0.08] bg-[#171d28] p-3 transition-colors hover:border-blue-400/30 ${movingTaskId === task.id ? 'opacity-50' : ''}`}>
                         <button onClick={() => openTask(task)} className="w-full text-left"><span className="flex items-start gap-2"><GripVertical className="mt-0.5 size-4 shrink-0 text-slate-600" /><span className="font-medium leading-5 text-slate-100">{task.title}</span></span></button>
                         {task.description && <p className="mt-2 line-clamp-2 pl-6 text-xs leading-5 text-slate-400">{task.description}</p>}
                         <div className="mt-3 flex flex-wrap items-center gap-1.5 pl-6">
@@ -532,14 +544,14 @@ export function ProjectWorkspace({ projectId }: { projectId: string }) {
                         </div>
                         <div className="mt-3 flex items-center justify-between gap-2 border-t border-white/[0.06] pt-2.5 pl-6">
                           <span className="flex min-w-0 items-center gap-2 truncate text-xs text-slate-400"><span className="max-w-24 truncate">{memberLabel(member)}</span>{Boolean(taskIndicators[task.id]?.comments) && <span className="inline-flex shrink-0 items-center gap-1" aria-label={`${taskIndicators[task.id].comments} comentários`}><MessageSquare className="size-3" />{taskIndicators[task.id].comments}</span>}{Boolean(taskIndicators[task.id]?.attachments) && <span className="inline-flex shrink-0 items-center gap-1" aria-label={`${taskIndicators[task.id].attachments} anexos`}><Paperclip className="size-3" />{taskIndicators[task.id].attachments}</span>}</span>
-                          <select value={column.status} onChange={(event) => void moveTask(task, event.target.value)} onClick={(event) => event.stopPropagation()} className="max-w-32 rounded-md border border-white/[0.08] bg-[#11161e] px-2 py-1 text-xs text-slate-300 focus-visible:outline-blue-300" aria-label={`Alterar status de ${task.title}`}>
+                          <select value={column.status} onChange={(event) => void moveTask(task, event.target.value)} onClick={(event) => event.stopPropagation()} disabled={!canUpdateTasks} className="max-w-32 rounded-md border border-white/[0.08] bg-[#11161e] px-2 py-1 text-xs text-slate-300 focus-visible:outline-blue-300 disabled:cursor-not-allowed disabled:opacity-60" aria-label={`Alterar status de ${task.title}`}>
                             {columns.map((status) => <option key={status.status} value={status.status}>{status.label}</option>)}{extraStatuses.map((status) => <option key={status} value={status}>{status}</option>)}{isCanceled(task.status) && <option value="Cancelado">Cancelada</option>}
                           </select>
                         </div>
                       </article>
                     })}
                     {cards.length === 0 && <p className="px-3 py-8 text-center text-sm text-slate-500">Nenhuma tarefa nesta etapa.</p>}
-                    {column.status !== 'Cancelado' && <button onClick={() => setTaskModal({ open: true, task: null, status: column.status })} className="flex min-h-10 items-center justify-center gap-2 rounded-lg border border-dashed border-white/[0.12] text-sm text-slate-400 hover:border-blue-400/40 hover:text-blue-200"><Plus className="size-4" />Adicionar tarefa</button>}
+                    {canCreateTasks && column.status !== 'Cancelado' && <button onClick={() => setTaskModal({ open: true, task: null, status: column.status })} className="flex min-h-10 items-center justify-center gap-2 rounded-lg border border-dashed border-white/[0.12] text-sm text-slate-400 hover:border-blue-400/40 hover:text-blue-200"><Plus className="size-4" />Adicionar tarefa</button>}
                   </div>
                 </section>
               })}
@@ -553,7 +565,7 @@ export function ProjectWorkspace({ projectId }: { projectId: string }) {
         )}
       </section>}
 
-      {tab === 'files' && <section className="rounded-xl border border-white/[0.07] bg-[#11161e] p-5"><h2 className="font-semibold text-slate-100">Arquivos do projeto</h2><p className="mt-1 text-sm text-slate-400">Documentos privados associados a este projeto.</p><EntityAttachments entityType="project" entityId={project.id} /></section>}
+      {tab === 'files' && <section className="rounded-xl border border-white/[0.07] bg-[#11161e] p-5"><h2 className="font-semibold text-slate-100">Arquivos do projeto</h2><p className="mt-1 text-sm text-slate-400">Documentos privados associados a este projeto.</p><EntityAttachments entityType="project" entityId={project.id} canUpload={permissions.includes('*') || permissions.includes('attachments:upload')} canDownload={permissions.includes('*') || permissions.includes('attachments:download')} canDelete={permissions.includes('*') || permissions.includes('attachments:delete')} /></section>}
       {tab === 'activity' && <section className="rounded-xl border border-white/[0.07] bg-[#11161e] p-5"><h2 className="font-semibold text-slate-100">Histórico do projeto</h2><p className="mt-1 text-sm text-slate-400">Eventos registrados a partir das alterações persistidas.</p><ActivityList activity={activity} memberById={memberById} error={activityError} /></section>}
 
       {editProjectOpen && <div className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-black/70 p-4" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setEditProjectOpen(false) }}>
@@ -564,8 +576,8 @@ export function ProjectWorkspace({ projectId }: { projectId: string }) {
             <label className="grid gap-1.5 text-sm text-slate-300 sm:col-span-2">Descrição<textarea name="description" defaultValue={project.description ?? ''} rows={3} className="field resize-y" /></label>
             <label className="grid gap-1.5 text-sm text-slate-300">Status<select name="status" defaultValue={project.status} className="field">{[...new Set([project.status, 'Backlog', 'Em andamento', 'Concluído', 'Arquivado'])].map((status) => <option key={status}>{status}</option>)}</select></label>
             <label className="grid gap-1.5 text-sm text-slate-300">Prioridade<select name="priority" defaultValue={project.priority} className="field">{[...new Set([project.priority, 'Baixa', 'Média', 'Alta', 'Urgente'])].map((value) => <option key={value}>{value}</option>)}</select></label>
-            <label className="grid gap-1.5 text-sm text-slate-300">Cliente<select name="client_id" defaultValue={project.client_id ?? ''} className="field"><option value="">Sem cliente</option>{clients.map((client) => <option key={client.id} value={client.id}>{client.trade_name || client.legal_name}</option>)}</select></label>
-            <label className="grid gap-1.5 text-sm text-slate-300">Responsável<select name="responsible_id" defaultValue={project.responsible_id ?? ''} className="field"><option value="">Sem responsável</option>{members.map((member) => <option key={member.user_id || member.id} value={member.user_id || member.id}>{member.full_name}</option>)}</select></label>
+            {canAssign && <label className="grid gap-1.5 text-sm text-slate-300">Cliente<select name="client_id" defaultValue={project.client_id ?? ''} className="field"><option value="">Sem cliente</option>{clients.map((client) => <option key={client.id} value={client.id}>{client.trade_name || client.legal_name}</option>)}</select></label>}
+            {canAssign && <label className="grid gap-1.5 text-sm text-slate-300">Responsável<select name="responsible_id" defaultValue={project.responsible_id ?? ''} className="field"><option value="">Sem responsável</option>{members.map((member) => <option key={member.user_id || member.id} value={member.user_id || member.id}>{member.full_name}</option>)}</select></label>}
             <label className="grid gap-1.5 text-sm text-slate-300">Prazo<input type="date" name="due_date" defaultValue={project.due_date ?? ''} className="field" /></label>
             <div className="mt-2 flex justify-end gap-2 sm:col-span-2"><button type="button" onClick={() => setEditProjectOpen(false)} className="min-h-10 rounded-lg px-4 text-sm text-slate-400 hover:bg-white/5">Cancelar</button><button disabled={taskSaving} className="flex min-h-10 items-center gap-2 rounded-lg bg-blue-500 px-4 text-sm font-semibold text-white hover:bg-blue-400 disabled:opacity-60"><Save className="size-4" />Salvar</button></div>
           </form>
@@ -577,18 +589,20 @@ export function ProjectWorkspace({ projectId }: { projectId: string }) {
           <div className="mb-5 flex items-start justify-between gap-4"><div><p className="text-xs font-medium uppercase tracking-[0.16em] text-blue-300">{taskModal.task ? 'Detalhes da tarefa' : 'Nova tarefa'}</p><h2 id="task-modal-title" className="mt-1 text-xl font-semibold text-white">{taskModal.task?.title || 'Adicionar tarefa'}</h2></div><button onClick={() => setTaskModal({ open: false, task: null, status: 'Backlog' })} aria-label="Fechar tarefa" className="rounded-md p-1 text-slate-400 hover:bg-white/5 hover:text-white"><X className="size-5" /></button></div>
           <div className="grid gap-4 lg:grid-cols-[1fr_300px]">
             <form onSubmit={taskModal.task ? updateTask : createTask} className="space-y-4">
-              <label className="grid gap-1.5 text-sm text-slate-300">Título<input required name="title" defaultValue={taskModal.task?.title ?? ''} autoFocus className="field" /></label>
-              <label className="grid gap-1.5 text-sm text-slate-300">Descrição<textarea name="description" rows={6} defaultValue={taskModal.task?.description ?? ''} className="field resize-y" /></label>
-              <div className="grid gap-3 sm:grid-cols-2">
-                <label className="grid gap-1.5 text-sm text-slate-300">Status<select name="status" defaultValue={taskModal.task ? boardStatus(taskModal.task.status) : taskModal.status} className="field">{columns.map((column) => <option key={column.status}>{column.status}</option>)}{extraStatuses.map((status) => <option key={status}>{status}</option>)}{taskModal.task && isCanceled(taskModal.task.status) && <option>Cancelado</option>}</select></label>
-                <label className="grid gap-1.5 text-sm text-slate-300">Prioridade<select name="priority" defaultValue={taskModal.task?.priority ?? 'Média'} className="field">{[...new Set([taskModal.task?.priority, 'Baixa', 'Média', 'Alta', 'Urgente'].filter((value): value is string => Boolean(value)))].map((priority) => <option key={priority}>{priority}</option>)}</select></label>
-                <label className="grid gap-1.5 text-sm text-slate-300">Responsável<select name="responsible_id" defaultValue={taskModal.task?.responsible_id ?? ''} className="field"><option value="">Sem responsável</option>{members.map((member) => <option key={member.user_id || member.id} value={member.user_id || member.id}>{member.full_name}</option>)}</select></label>
-                <label className="grid gap-1.5 text-sm text-slate-300">Prazo<input type="date" name="due_date" defaultValue={taskModal.task?.due_date ?? ''} className="field" /></label>
-              </div>
-              <div className="flex flex-wrap items-center justify-end gap-2 border-t border-white/[0.08] pt-4">
-                {taskModal.task && <button type="button" onClick={() => void deleteTask(taskModal.task!)} className="mr-auto min-h-10 rounded-lg border border-rose-400/20 px-3 text-sm text-rose-200 hover:bg-rose-400/10">Excluir tarefa</button>}
-                <button type="button" onClick={() => setTaskModal({ open: false, task: null, status: 'Backlog' })} className="min-h-10 rounded-lg px-4 text-sm text-slate-400 hover:bg-white/5">Cancelar</button>
-                <button disabled={taskSaving} className="flex min-h-10 items-center gap-2 rounded-lg bg-blue-500 px-4 text-sm font-semibold text-white hover:bg-blue-400 disabled:opacity-60"><Save className="size-4" />{taskSaving ? 'Salvando...' : taskModal.task ? 'Salvar alterações' : 'Criar tarefa'}</button>
+              <fieldset disabled={taskModal.task ? !canUpdateTasks : !canCreateTasks} className="space-y-4">
+                <label className="grid gap-1.5 text-sm text-slate-300">Título<input required name="title" defaultValue={taskModal.task?.title ?? ''} autoFocus className="field" /></label>
+                <label className="grid gap-1.5 text-sm text-slate-300">Descrição<textarea name="description" rows={6} defaultValue={taskModal.task?.description ?? ''} className="field resize-y" /></label>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <label className="grid gap-1.5 text-sm text-slate-300">Status<select name="status" defaultValue={taskModal.task ? boardStatus(taskModal.task.status) : taskModal.status} className="field">{columns.map((column) => <option key={column.status}>{column.status}</option>)}{extraStatuses.map((status) => <option key={status}>{status}</option>)}{taskModal.task && isCanceled(taskModal.task.status) && <option>Cancelado</option>}</select></label>
+                  <label className="grid gap-1.5 text-sm text-slate-300">Prioridade<select name="priority" defaultValue={taskModal.task?.priority ?? 'Média'} className="field">{[...new Set([taskModal.task?.priority, 'Baixa', 'Média', 'Alta', 'Urgente'].filter((value): value is string => Boolean(value)))].map((priority) => <option key={priority}>{priority}</option>)}</select></label>
+                  {canAssign && <label className="grid gap-1.5 text-sm text-slate-300">Responsável<select name="responsible_id" defaultValue={taskModal.task?.responsible_id ?? ''} className="field"><option value="">Sem responsável</option>{members.map((member) => <option key={member.user_id || member.id} value={member.user_id || member.id}>{member.full_name}</option>)}</select></label>}
+                  <label className="grid gap-1.5 text-sm text-slate-300">Prazo<input type="date" name="due_date" defaultValue={taskModal.task?.due_date ?? ''} className="field" /></label>
+                </div>
+              </fieldset>
+                <div className="flex flex-wrap items-center justify-end gap-2 border-t border-white/[0.08] pt-4">
+                  {taskModal.task && canDeleteTasks && <button type="button" onClick={() => void deleteTask(taskModal.task!)} className="mr-auto min-h-10 rounded-lg border border-rose-400/20 px-3 text-sm text-rose-200 hover:bg-rose-400/10">Excluir tarefa</button>}
+                  <button type="button" onClick={() => setTaskModal({ open: false, task: null, status: 'Backlog' })} className="min-h-10 rounded-lg px-4 text-sm text-slate-400 hover:bg-white/5">Cancelar</button>
+                  {((taskModal.task && canUpdateTasks) || (!taskModal.task && canCreateTasks)) && <button disabled={taskSaving} className="flex min-h-10 items-center gap-2 rounded-lg bg-blue-500 px-4 text-sm font-semibold text-white hover:bg-blue-400 disabled:opacity-60"><Save className="size-4" />{taskSaving ? 'Salvando...' : taskModal.task ? 'Salvar alterações' : 'Criar tarefa'}</button>}
               </div>
             </form>
             <div className="space-y-4">
@@ -599,17 +613,17 @@ export function ProjectWorkspace({ projectId }: { projectId: string }) {
                   {commentError && <p role="alert" className="mt-3 text-xs text-rose-200">{commentError}</p>}
                   {commentLoading ? <p className="mt-3 flex items-center text-sm text-slate-500"><Loader2 className="mr-2 size-4 animate-spin" />Carregando comentários...</p> : <div className="mt-3 max-h-56 space-y-3 overflow-y-auto">
                     {commentItems.map((comment) => <article key={comment.id} className="rounded-lg border border-white/[0.06] p-3">
-                      <div className="flex items-start justify-between gap-2"><div><p className="text-xs font-medium text-slate-200">{memberLabel(memberById.get(comment.author_id))}</p><p className="mt-0.5 text-[11px] text-slate-500">{shortDate(comment.created_at)}{comment.updated_at !== comment.created_at ? ' · editado' : ''}</p></div>{comment.author_id === currentUserId && <div className="flex gap-1"><button type="button" onClick={() => { setEditingComment(comment.id); setCommentError('') }} className="rounded px-2 py-1 text-xs text-slate-400 hover:text-white">Editar</button><button type="button" onClick={() => void deleteComment(comment)} className="rounded px-2 py-1 text-xs text-rose-300 hover:bg-rose-400/10">Excluir</button></div>}</div>
+                      <div className="flex items-start justify-between gap-2"><div><p className="text-xs font-medium text-slate-200">{memberLabel(memberById.get(comment.author_id))}</p><p className="mt-0.5 text-[11px] text-slate-500">{shortDate(comment.created_at)}{comment.updated_at !== comment.created_at ? ' · editado' : ''}</p></div>{canUpdateTasks && comment.author_id === currentUserId && <div className="flex gap-1"><button type="button" onClick={() => { setEditingComment(comment.id); setCommentError('') }} className="rounded px-2 py-1 text-xs text-slate-400 hover:text-white">Editar</button><button type="button" onClick={() => void deleteComment(comment)} className="rounded px-2 py-1 text-xs text-rose-300 hover:bg-rose-400/10">Excluir</button></div>}</div>
                       {editingComment === comment.id ? <CommentEditForm initialValue={comment.body} onCancel={() => setEditingComment('')} onSave={(body) => void saveComment(comment, body)} /> : <p className="mt-2 whitespace-pre-wrap text-sm leading-5 text-slate-300">{comment.body}</p>}
                     </article>)}
                     {!commentItems.length && !commentError && <p className="text-sm text-slate-500">Ainda não há comentários.</p>}
                   </div>}
-                  <form onSubmit={publishComment} className="mt-3 space-y-2 border-t border-white/[0.07] pt-3">
+                  {canUpdateTasks ? <form onSubmit={publishComment} className="mt-3 space-y-2 border-t border-white/[0.07] pt-3">
                     <label className="sr-only" htmlFor="new-task-comment">Escreva um comentário</label><textarea id="new-task-comment" value={commentBody} onChange={(event) => setCommentBody(event.target.value)} maxLength={10000} rows={3} placeholder="Escreva um comentário..." className="field resize-y" />
                     <button disabled={commentSaving || !commentBody.trim()} className="flex min-h-9 items-center gap-2 rounded-lg bg-blue-500 px-3 text-sm font-medium text-white hover:bg-blue-400 disabled:opacity-50"><Send className="size-3.5" />{commentSaving ? 'Publicando...' : 'Publicar'}</button>
-                  </form>
+                  </form> : <p className="mt-3 border-t border-white/[0.07] pt-3 text-xs text-slate-500">Você tem acesso somente para leitura.</p>}
                 </section>
-                <EntityAttachments entityType="task" entityId={taskModal.task.id} /><TaskSharing taskId={taskModal.task.id} projectId={projectId} currentUserId={currentUserId} responsibleId={taskModal.task.responsible_id} onChanged={() => void loadData()} />
+                <EntityAttachments entityType="task" entityId={taskModal.task.id} canUpload={permissions.includes('*') || permissions.includes('attachments:upload')} canDownload={permissions.includes('*') || permissions.includes('attachments:download')} canDelete={permissions.includes('*') || permissions.includes('attachments:delete')} /><TaskSharing taskId={taskModal.task.id} projectId={projectId} currentUserId={currentUserId} responsibleId={taskModal.task.responsible_id} onChanged={() => void loadData()} />
               </> : <div className="rounded-lg border border-dashed border-white/[0.1] p-4 text-sm leading-6 text-slate-400">Depois de criar a tarefa, você poderá adicionar comentários e anexos persistentes aqui.</div>}
             </div>
           </div>
