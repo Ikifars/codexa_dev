@@ -32,6 +32,7 @@ type ProjectTask = {
   responsible_id: string | null
   created_at: string
   updated_at: string
+  participants?: string[] | null
 }
 
 type TeamMember = { id: string; user_id: string | null; full_name: string; email: string; status: string }
@@ -122,13 +123,13 @@ export function ProjectWorkspace({ projectId }: { projectId: string }) {
   const loadData = useCallback(async () => {
     setLoading(true)
     setError('')
-    const [projectResult, taskResult, memberResult, clientResult, activityResult, userResult] = await Promise.all([
+    const { data: authData } = await supabase.auth.getUser()
+    const [projectResult, taskResult, memberResult, clientResult, activityResult] = await Promise.all([
       supabase.from('projects').select('id,name,description,status,priority,due_date,completed_at,created_at,client_id,responsible_id,client:clients(id,legal_name,trade_name)').eq('id', projectId).maybeSingle(),
-      supabase.from('project_tasks').select('id,project_id,title,description,status,priority,due_date,responsible_id,created_at,updated_at').eq('project_id', projectId).order('created_at', { ascending: true }),
+      supabase.from('project_tasks').select('id,project_id,title,description,status,priority,due_date,responsible_id,participants,created_at,updated_at').eq('project_id', projectId).order('created_at', { ascending: true }),
       supabase.from('team_members').select('id,user_id,full_name,email,status').order('full_name'),
       supabase.from('clients').select('id,legal_name,trade_name').order('legal_name'),
       supabase.from('project_activity').select('id,project_id,task_id,actor_id,event_type,summary,metadata,created_at').eq('project_id', projectId).order('created_at', { ascending: false }).limit(100),
-      supabase.auth.getUser(),
     ])
 
     if (projectResult.error) {
@@ -174,7 +175,7 @@ export function ProjectWorkspace({ projectId }: { projectId: string }) {
     setActivity((activityResult.data ?? []) as ProjectActivity[])
     setActivityError(activityResult.error?.message ?? '')
     if (memberResult.error) setError(memberResult.error.message)
-    setCurrentUserId(userResult.data.user?.id ?? '')
+    setCurrentUserId(authData.user?.id ?? '')
     setLoading(false)
   }, [projectId, supabase])
 

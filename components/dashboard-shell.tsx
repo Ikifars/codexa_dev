@@ -120,7 +120,7 @@ const toneClasses: Record<string, string> = {
   indigo: 'bg-indigo-500/10 text-indigo-400',
 }
 
-type WorkspaceNotification = { id: string; message: string; notification_type: string; read_at: string | null; created_at: string }
+type WorkspaceNotification = { id: string; message: string; notification_type: string; entity_type?: string | null; entity_id?: string | null; link_path?: string | null; read_at: string | null; created_at: string }
 type SearchItem = { label: string; slug: string; group: string }
 
 function DashboardContent({ initialSection = 'Dashboard', page, permissions, profileName = '' }: { initialSection?: string; page?: ReactNode; permissions: string[]; profileName?: string }) {
@@ -220,6 +220,29 @@ function DashboardContent({ initialSection = 'Dashboard', page, permissions, pro
     }
   }
 
+  async function respondToTaskNotification(notification: WorkspaceNotification, status: 'accepted' | 'rejected') {
+    if (!notification.entity_id) return
+    const supabase = createClient()
+    const { data: userData } = await supabase.auth.getUser()
+    const userId = userData.user?.id
+    if (!userId) return
+    const { data: request } = await supabase.from('task_transfer_requests').select('id,requester_id,request_type').eq('task_id', notification.entity_id).eq('target_id', userId).eq('status', 'pending').order('created_at', { ascending: false }).maybeSingle()
+    if (!request) return
+    const { error } = await supabase.from('task_transfer_requests').update({ status, responded_at: new Date().toISOString() }).eq('id', request.id).eq('target_id', userId)
+    if (error) return
+    if (status === 'accepted') {
+      if (request.request_type === 'transfer') await supabase.from('project_tasks').update({ responsible_id: userId }).eq('id', notification.entity_id)
+      else {
+        const { data: task } = await supabase.from('project_tasks').select('participants').eq('id', notification.entity_id).maybeSingle()
+        const participants = Array.isArray(task?.participants) ? task.participants : []
+        await supabase.from('project_tasks').update({ participants: Array.from(new Set([...participants, userId])) }).eq('id', notification.entity_id)
+      }
+    }
+    await supabase.from('notifications').insert({ recipient_id: request.requester_id, notification_type: `task_${status}`, message: `Sua solicitação de ${request.request_type === 'share' ? 'compartilhamento' : 'transferência'} foi ${status === 'accepted' ? 'aceita' : 'recusada'}.`, entity_type: 'task', entity_id: notification.entity_id, link_path: notification.link_path })
+    await markNotificationRead(notification)
+    await loadNotifications()
+  }
+
   const searchItems: SearchItem[] = navigationGroups.flatMap((group) => group.items.flatMap((item) => {
     const slug = sectionSlugs[item.label]
     return slug && hasWorkspaceAccess(permissions, slug) ? [{ label: item.label, slug, group: group.label }] : []
@@ -296,10 +319,10 @@ function DashboardContent({ initialSection = 'Dashboard', page, permissions, pro
                 {notificationsError && <p role="alert" className="px-4 py-3 text-xs text-rose-300">{notificationsError}</p>}
                 <div className="max-h-96 overflow-y-auto">
                   {notificationsLoading ? <p className="px-4 py-8 text-center text-xs text-slate-500">Carregando notificações...</p>
-                    : notifications.length ? notifications.map((notification) => <button key={notification.id} onClick={() => void markNotificationRead(notification)} className={`flex w-full gap-3 border-b border-white/[0.05] px-4 py-3 text-left last:border-0 hover:bg-white/[0.04] ${notification.read_at ? 'opacity-70' : ''}`}>
+                    : notifications.length ? notifications.map((notification) => <div key={notification.id} className={`flex gap-3 border-b border-white/[0.05] px-4 py-3 last:border-0 hover:bg-white/[0.04] ${notification.read_at ? 'opacity-70' : ''}`}>
                       <span className={`mt-1.5 size-2 shrink-0 rounded-full ${notification.read_at ? 'bg-slate-600' : 'bg-blue-400'}`} />
-                      <span className="min-w-0"><span className="block text-xs leading-5 text-slate-200">{notification.message}</span><span className="mt-1 block text-[10px] text-slate-500">{new Date(notification.created_at).toLocaleString('pt-BR')}</span></span>
-                    </button>)
+                      <div className="min-w-0 flex-1"><button type="button" onClick={() => { void markNotificationRead(notification); if (notification.link_path) router.push(notification.link_path) }} className="block w-full text-left"><span className="block text-xs leading-5 text-slate-200">{notification.message}</span><span className="mt-1 block text-[10px] text-slate-500">{new Date(notification.created_at).toLocaleString('pt-BR')}</span></button>{notification.notification_type === 'task_share' || notification.notification_type === 'task_transfer' ? <div className="mt-2 flex gap-2"><button type="button" onClick={() => void respondToTaskNotification(notification, 'accepted')} className="rounded bg-emerald-500/15 px-2 py-1 text-[11px] font-medium text-emerald-300 hover:bg-emerald-500/25">Aceitar</button><button type="button" onClick={() => void respondToTaskNotification(notification, 'rejected')} className="rounded bg-rose-500/15 px-2 py-1 text-[11px] font-medium text-rose-300 hover:bg-rose-500/25">Rejeitar</button></div> : null}</div>
+                    </div>)
                     : !notificationsError && <p className="px-4 py-8 text-center text-xs text-slate-500">Nenhuma notificação encontrada.</p>}
                 </div>
               </section>}
