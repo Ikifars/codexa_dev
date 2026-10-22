@@ -1,7 +1,7 @@
 'use client'
 
 import { FormEvent, useEffect, useMemo, useState } from 'react'
-import { Check, Copy, KeyRound, Loader2, Plus, Search, ShieldCheck, X } from 'lucide-react'
+import { Check, Copy, KeyRound, Loader2, Plus, Search, ShieldCheck, Trash2, X } from 'lucide-react'
 import { isModuleAvailable } from '@/lib/licensing/module-status'
 
 type Client = { id: string; name: string }
@@ -44,6 +44,7 @@ export function LicenseWorkspace() {
   const [data, setData] = useState<LicenseData>({ clients: [], systems: [], licenses: [] })
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [deletingId, setDeletingId] = useState('')
   const [showForm, setShowForm] = useState(false)
   const [search, setSearch] = useState('')
   const [error, setError] = useState('')
@@ -149,11 +150,31 @@ export function LicenseWorkspace() {
                 ? { ...item, is_contracted: contracted, is_enabled: contracted && enabled }
                 : item),
             }
+
           : license),
       }))
       if (result.warning) setNotice(result.warning)
     } catch (updateError) {
       setError(updateError instanceof Error ? updateError.message : 'Não foi possível atualizar o módulo.')
+    }
+  }
+
+  async function deleteLicense(license: License) {
+    const clientName = data.clients.find((client) => client.id === license.client_id)?.name ?? 'este cliente'
+    const systemName = data.systems.find((system) => system.id === license.system_id)?.name ?? 'este sistema'
+    if (!window.confirm(`Excluir permanentemente a licença de ${clientName} (${systemName})? Os módulos associados também serão removidos.`)) return
+
+    setDeletingId(license.id)
+    setError('')
+    setNotice('')
+    try {
+      const result = await requestJson<{ warning?: string | null }>(`/api/admin/licenses/${license.id}`, { method: 'DELETE' })
+      setData((current) => ({ ...current, licenses: current.licenses.filter((item) => item.id !== license.id) }))
+      setNotice(result.warning || 'Licença excluída.')
+    } catch (deleteError) {
+      setError(deleteError instanceof Error ? deleteError.message : 'Não foi possível excluir a licença.')
+    } finally {
+      setDeletingId('')
     }
   }
 
@@ -225,7 +246,7 @@ export function LicenseWorkspace() {
         const client = data.clients.find((item) => item.id === license.client_id)?.name ?? 'Cliente não encontrado'
         const system = data.systems.find((item) => item.id === license.system_id)?.name ?? 'Sistema não encontrado'
         return <article key={license.id} className="rounded-xl border border-white/[0.07] bg-[#11161e]">
-          <div className="grid gap-4 border-b border-white/[0.06] p-5 lg:grid-cols-[1fr_150px_190px] lg:items-center">
+          <div className="grid gap-4 border-b border-white/[0.06] p-5 lg:grid-cols-[1fr_150px_190px_auto] lg:items-center">
             <div><p className="text-sm font-medium text-white">{client}</p><p className="mt-1 text-xs text-slate-500">{system}</p><p className="mt-2 text-[11px] text-slate-600">Criada em {new Date(license.created_at).toLocaleDateString('pt-BR')}</p></div>
             <label className="text-[11px] text-slate-500">Status
               <select value={license.status} onChange={(event) => void updateLicense(license.id, { status: event.target.value })} className={`${inputClass} mt-1.5 w-full text-xs`}>
@@ -235,6 +256,9 @@ export function LicenseWorkspace() {
             <label className="text-[11px] text-slate-500">Expira em
               <input type="date" value={license.expires_at ? new Date(license.expires_at).toISOString().slice(0, 10) : ''} onChange={(event) => void updateLicense(license.id, { expiresAt: event.target.value || null })} className={`${inputClass} mt-1.5 w-full text-xs`} />
             </label>
+            <button type="button" onClick={() => void deleteLicense(license)} disabled={deletingId === license.id} title="Excluir licença permanentemente" aria-label={`Excluir licença de ${client}`} className="inline-flex items-center justify-center gap-2 rounded-lg border border-rose-400/20 px-3 py-2.5 text-xs font-medium text-rose-200 hover:bg-rose-400/10 disabled:cursor-wait disabled:opacity-50">
+              {deletingId === license.id ? <Loader2 className="size-4 animate-spin" /> : <Trash2 className="size-4" />}<span className="lg:hidden">Excluir</span>
+            </button>
           </div>
           <div className="p-5">
             <div className="mb-3 flex flex-wrap items-center justify-between gap-2">

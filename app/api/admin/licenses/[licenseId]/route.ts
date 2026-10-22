@@ -70,3 +70,37 @@ export async function PATCH(request: Request, context: { params: Promise<{ licen
     return responseError(error)
   }
 }
+
+export async function DELETE(_request: Request, context: { params: Promise<{ licenseId: string }> }) {
+  try {
+    const { licenseId } = await context.params
+    if (!uuidPattern.test(licenseId)) {
+      return NextResponse.json({ error: 'Identificador de licença inválido.' }, { status: 400 })
+    }
+    const { actorId, supabase } = await requireWorkspacePermission('licenses', 'manage_licenses')
+    const { data: license, error: deleteError } = await supabase
+      .from('licenses')
+      .delete()
+      .eq('id', licenseId)
+      .select('id')
+      .maybeSingle()
+    if (deleteError) return responseError(deleteError)
+    if (!license) return NextResponse.json({ error: 'Licença não encontrada.' }, { status: 404 })
+
+    const { error: auditError } = await supabase.from('admin_audit_events').insert({
+      actor_id: actorId,
+      action_name: 'license.deleted',
+      entity_type: 'license',
+      entity_id: license.id,
+      result: 'success',
+    })
+    if (auditError) console.error('License deletion audit write failed:', auditError.message)
+
+    return NextResponse.json({
+      ok: true,
+      warning: auditError ? 'Licença excluída, mas o evento de auditoria não foi salvo.' : null,
+    })
+  } catch (error) {
+    return responseError(error)
+  }
+}

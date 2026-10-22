@@ -8,7 +8,7 @@ import { hasWorkspaceAccess } from '@/lib/workspace-access'
 
 type Module = 'projects' | 'change_requests' | 'support_tickets'
 type ChangeRequest = { id: string; title: string; requester: string; description: string | null; status: string; priority: string; category: string; effort_hours: number }
-type Ticket = { id: string; ticket_number: string; subject: string; requester: string; description: string | null; status: string; priority: string; category: string; due_at: string | null }
+type Ticket = { id: string; ticket_number: string; subject: string; requester: string; description: string | null; status: string; priority: string; category: string; due_at: string | null; scheduled_at: string | null; resolution: string | null; resolved_at: string | null }
 type OperationalRecord = ChangeRequest | Ticket
 
 const modules = [
@@ -17,6 +17,21 @@ const modules = [
   ['support_tickets', Headphones, 'Suporte'],
 ] as const
 const inputClass = 'w-full rounded-lg border border-white/10 bg-[#151b24] p-3 text-sm text-white'
+const supportStatuses = ['Aberto', 'Em andamento', 'Aguardando cliente', 'Resolvido', 'Fechado']
+
+function toLocalDateTime(value: string | null) {
+  if (!value) return ''
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return ''
+  date.setMinutes(date.getMinutes() - date.getTimezoneOffset())
+  return date.toISOString().slice(0, 16)
+}
+
+function toIsoDateTime(value: FormDataEntryValue | undefined) {
+  if (typeof value !== 'string' || !value) return null
+  const date = new Date(value)
+  return Number.isNaN(date.getTime()) ? null : date.toISOString()
+}
 
 export function OperationsWorkspace({ initialModule = 'projects', permissions }: { initialModule?: Module; permissions: string[] }) {
   const [module, setModule] = useState<Module>(initialModule)
@@ -55,7 +70,7 @@ export function OperationsWorkspace({ initialModule = 'projects', permissions }:
       else setRequests((data ?? []) as ChangeRequest[])
     } else {
       const { data, error: queryError } = await supabase.from('support_tickets')
-        .select('id,ticket_number,subject,requester,description,status,priority,category,due_at')
+        .select('id,ticket_number,subject,requester,description,status,priority,category,due_at,scheduled_at,resolution,resolved_at')
         .order('created_at', { ascending: false })
       if (queryError) setError(`Não foi possível carregar os chamados: ${queryError.message}`)
       else setTickets((data ?? []) as Ticket[])
@@ -96,7 +111,20 @@ export function OperationsWorkspace({ initialModule = 'projects', permissions }:
     }
     const payload = module === 'change_requests'
       ? { requester: data.requester, title: data.title, description: data.description, category: data.category || 'Nova funcionalidade', priority: data.priority || 'Média' }
-      : { ticket_number: data.ticket_number, requester: data.requester, subject: data.subject, description: data.description, category: data.category || 'Suporte corretivo', priority: data.priority || 'Média', technical_responsible_id: technicalResponsibleId }
+      : {
+          ticket_number: data.ticket_number,
+          requester: data.requester,
+          subject: data.subject,
+          description: data.description,
+          category: data.category || 'Suporte corretivo',
+          priority: data.priority || 'Média',
+          status: data.status || 'Aberto',
+          due_at: toIsoDateTime(data.due_at),
+          scheduled_at: toIsoDateTime(data.scheduled_at),
+          resolution: data.resolution || null,
+          resolved_at: ['Resolvido', 'Fechado'].includes(String(data.status)) ? new Date().toISOString() : null,
+          technical_responsible_id: technicalResponsibleId,
+        }
     const table = module === 'change_requests' ? 'change_requests' : 'support_tickets'
     const { error: insertError } = await createClient().from(table).insert(payload)
     if (insertError) {
@@ -115,9 +143,24 @@ export function OperationsWorkspace({ initialModule = 'projects', permissions }:
     setSaving(true)
     setError('')
     const data = Object.fromEntries(new FormData(event.currentTarget).entries())
-    const payload = module === 'change_requests'
-      ? { title: data.title, requester: data.requester, description: data.description || null, category: data.category, priority: data.priority, status: data.status }
-      : { subject: data.subject, requester: data.requester, description: data.description || null, category: data.category, priority: data.priority, status: data.status }
+    const isSupportTicket = module === 'support_tickets'
+    const previousTicket = isSupportTicket ? record as Ticket : null
+    const isResolved = isSupportTicket && ['Resolvido', 'Fechado'].includes(String(data.status))
+    const wasResolved = previousTicket && ['Resolvido', 'Fechado'].includes(previousTicket.status)
+    const payload = isSupportTicket
+      ? {
+          subject: data.subject,
+          requester: data.requester,
+          description: data.description || null,
+          category: data.category,
+          priority: data.priority,
+          status: data.status,
+          due_at: toIsoDateTime(data.due_at),
+          scheduled_at: toIsoDateTime(data.scheduled_at),
+          resolution: data.resolution || null,
+          resolved_at: isResolved ? (wasResolved ? previousTicket.resolved_at : new Date().toISOString()) : null,
+        }
+      : { title: data.title, requester: data.requester, description: data.description || null, category: data.category, priority: data.priority, status: data.status }
     const table = module === 'change_requests' ? 'change_requests' : 'support_tickets'
     const { error: updateError } = await createClient().from(table).update(payload).eq('id', record.id)
     if (updateError) setError(`Não foi possível salvar as alterações: ${updateError.message}`)
@@ -149,9 +192,29 @@ export function OperationsWorkspace({ initialModule = 'projects', permissions }:
         <td className="px-5 py-3 text-right"><div className="inline-flex gap-1"><button onClick={() => { setRecord(item); setEditingRecord(false); setError('') }} aria-label="Ver detalhes" className="rounded p-1.5 text-slate-400 hover:bg-white/5 hover:text-white"><Eye className="size-3.5" /></button>{canUpdate && <button onClick={() => { setRecord(item); setEditingRecord(true); setError('') }} aria-label="Editar registro" className="rounded p-1.5 text-slate-400 hover:bg-white/5 hover:text-white"><Pencil className="size-3.5" /></button>}{canDelete && <button onClick={() => void remove(item.id)} aria-label="Excluir registro" className="rounded p-1.5 text-slate-600 hover:bg-rose-500/10 hover:text-rose-300"><Trash2 className="size-3.5" /></button>}</div></td>
       </tr>)}</tbody>
     </table>}</div>
-    {modal && <div className="fixed inset-0 z-50 grid place-items-center bg-black/70 p-4"><div className="w-full max-w-lg rounded-xl border border-white/10 bg-[#151b24] p-5 shadow-2xl">
+    {modal && <div className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-black/70 p-4"><div className="w-full max-w-2xl rounded-xl border border-white/10 bg-[#151b24] p-5 shadow-2xl">
       <div className="mb-5 flex items-center justify-between"><div><h3 className="font-semibold text-white">Novo {module === 'change_requests' ? 'solicitação' : 'chamado'}</h3><p className="mt-1 text-xs text-slate-500">Os campos obrigatórios são validados pelo banco.</p></div><button onClick={() => setModal(false)} aria-label="Fechar formulário"><X className="size-4 text-slate-500" /></button></div>
-      <form onSubmit={(event) => void createRecord(event)} className="flex flex-col gap-3">{module === 'change_requests' ? <><input required name="requester" placeholder="Solicitante *" className={inputClass} /><input required name="title" placeholder="Título *" className={inputClass} /><textarea required name="description" placeholder="Descrição *" rows={3} className={`${inputClass} resize-none`} /><select name="category" className={inputClass}><option>Nova funcionalidade</option><option>Melhoria</option><option>Correção</option></select></> : <><input required name="ticket_number" placeholder="Número do chamado *" className={inputClass} /><input required name="requester" placeholder="Solicitante *" className={inputClass} /><input required name="subject" placeholder="Assunto *" className={inputClass} /><textarea required name="description" placeholder="Descrição *" rows={3} className={`${inputClass} resize-none`} /><select name="category" className={inputClass}><option>Suporte corretivo</option><option>Dúvida</option><option>Solicitação</option></select></>}<select name="priority" className={inputClass}><option>Média</option><option>Baixa</option><option>Alta</option><option>Urgente</option></select><div className="flex justify-end gap-2"><button type="button" onClick={() => setModal(false)} className="rounded-lg px-3 py-2 text-xs text-slate-400">Cancelar</button><button disabled={saving} className="rounded-lg bg-cyan-500 px-4 py-2 text-xs font-semibold text-slate-950 disabled:opacity-60">{saving ? 'Salvando...' : 'Salvar'}</button></div></form>
+      <form onSubmit={(event) => void createRecord(event)} className="grid gap-3 sm:grid-cols-2">
+        {module === 'change_requests' ? <>
+          <label className="text-xs text-slate-400">Solicitante<input required name="requester" className={`${inputClass} mt-1.5`} /></label>
+          <label className="text-xs text-slate-400">Título<input required name="title" className={`${inputClass} mt-1.5`} /></label>
+          <label className="text-xs text-slate-400">Categoria<select name="category" className={`${inputClass} mt-1.5`}><option>Nova funcionalidade</option><option>Melhoria</option><option>Correção</option></select></label>
+          <label className="text-xs text-slate-400">Prioridade<select name="priority" className={`${inputClass} mt-1.5`}><option>Média</option><option>Baixa</option><option>Alta</option><option>Urgente</option></select></label>
+          <label className="text-xs text-slate-400 sm:col-span-2">Descrição<textarea required name="description" rows={4} className={`${inputClass} mt-1.5 resize-y`} /></label>
+        </> : <>
+          <label className="text-xs text-slate-400">Número do chamado<input required name="ticket_number" className={`${inputClass} mt-1.5`} /></label>
+          <label className="text-xs text-slate-400">Solicitante<input required name="requester" className={`${inputClass} mt-1.5`} /></label>
+          <label className="text-xs text-slate-400 sm:col-span-2">Assunto<input required name="subject" className={`${inputClass} mt-1.5`} /></label>
+          <label className="text-xs text-slate-400">Categoria<select name="category" className={`${inputClass} mt-1.5`}><option>Suporte corretivo</option><option>Dúvida</option><option>Solicitação</option></select></label>
+          <label className="text-xs text-slate-400">Prioridade<select name="priority" className={`${inputClass} mt-1.5`}><option>Média</option><option>Baixa</option><option>Alta</option><option>Urgente</option></select></label>
+          <label className="text-xs text-slate-400">Status<select name="status" defaultValue="Aberto" className={`${inputClass} mt-1.5`}>{supportStatuses.map((status) => <option key={status}>{status}</option>)}</select></label>
+          <label className="text-xs text-slate-400">Prazo<input name="due_at" type="datetime-local" className={`${inputClass} mt-1.5`} /></label>
+          <label className="text-xs text-slate-400 sm:col-span-2">Horário agendado<input name="scheduled_at" type="datetime-local" className={`${inputClass} mt-1.5`} /></label>
+          <label className="text-xs text-slate-400 sm:col-span-2">Descrição do problema<textarea required name="description" rows={4} className={`${inputClass} mt-1.5 resize-y`} /></label>
+          <label className="text-xs text-slate-400 sm:col-span-2">Resolução (opcional)<textarea name="resolution" rows={3} className={`${inputClass} mt-1.5 resize-y`} /></label>
+        </>}
+        <div className="flex justify-end gap-2 sm:col-span-2"><button type="button" onClick={() => setModal(false)} className="rounded-lg px-3 py-2 text-xs text-slate-400">Cancelar</button><button disabled={saving} className="rounded-lg bg-cyan-500 px-4 py-2 text-xs font-semibold text-slate-950 disabled:opacity-60">{saving ? 'Salvando...' : 'Salvar'}</button></div>
+      </form>
     </div></div>}
     {record && <div className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-black/70 p-4" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setRecord(null) }}><div className="w-full max-w-xl rounded-xl border border-white/10 bg-[#151b24] p-5 shadow-2xl">
       <div className="mb-5 flex items-start justify-between gap-4"><div><p className="text-xs uppercase tracking-wider text-cyan-300">{module === 'change_requests' ? 'Solicitação' : `Chamado ${(record as Ticket).ticket_number}`}</p><h3 className="mt-1 text-lg font-semibold text-white">{editingRecord ? 'Editar registro' : ('subject' in record ? record.subject : record.title)}</h3></div><button type="button" onClick={() => setRecord(null)} aria-label="Fechar detalhes"><X className="size-5 text-slate-400" /></button></div>
@@ -160,10 +223,25 @@ export function OperationsWorkspace({ initialModule = 'projects', permissions }:
         <label className="text-xs text-slate-400">Solicitante<input name="requester" required defaultValue={record.requester} className={`${inputClass} mt-1`} /></label>
         <label className="text-xs text-slate-400">Categoria<input name="category" required defaultValue={record.category} className={`${inputClass} mt-1`} /></label>
         <label className="text-xs text-slate-400">Prioridade<select name="priority" defaultValue={record.priority} className={`${inputClass} mt-1`}><option>Baixa</option><option>Média</option><option>Alta</option><option>Urgente</option></select></label>
-        <label className="text-xs text-slate-400">Status<input name="status" required defaultValue={record.status} className={`${inputClass} mt-1`} /></label>
-        <label className="text-xs text-slate-400 sm:col-span-2">Descrição<textarea name="description" defaultValue={record.description || ''} rows={5} className={`${inputClass} mt-1`} /></label>
+        {'ticket_number' in record
+          ? <label className="text-xs text-slate-400">Status<select name="status" required defaultValue={record.status} className={`${inputClass} mt-1`}>{!supportStatuses.includes(record.status) && <option>{record.status}</option>}{supportStatuses.map((status) => <option key={status}>{status}</option>)}</select></label>
+          : <label className="text-xs text-slate-400">Status<input name="status" required defaultValue={record.status} className={`${inputClass} mt-1`} /></label>}
+        {'ticket_number' in record && <>
+          <label className="text-xs text-slate-400">Prazo<input name="due_at" type="datetime-local" defaultValue={toLocalDateTime(record.due_at)} className={`${inputClass} mt-1`} /></label>
+          <label className="text-xs text-slate-400">Horário agendado<input name="scheduled_at" type="datetime-local" defaultValue={toLocalDateTime(record.scheduled_at)} className={`${inputClass} mt-1`} /></label>
+        </>}
+        <label className="text-xs text-slate-400 sm:col-span-2">Descrição<textarea name="description" defaultValue={record.description || ''} rows={5} className={`${inputClass} mt-1 resize-y`} /></label>
+        {'ticket_number' in record && <label className="text-xs text-slate-400 sm:col-span-2">Resolução<textarea name="resolution" defaultValue={record.resolution || ''} rows={4} className={`${inputClass} mt-1 resize-y`} /></label>}
         <div className="flex justify-end gap-2 sm:col-span-2"><button type="button" onClick={() => setEditingRecord(false)} className="rounded-lg px-3 py-2 text-xs text-slate-300">Cancelar</button><button disabled={saving} className="rounded-lg bg-cyan-500 px-4 py-2 text-xs font-semibold text-slate-950">{saving ? 'Salvando...' : 'Salvar alterações'}</button></div>
-      </form> : <><div className="grid gap-4 text-sm sm:grid-cols-2"><p className="text-slate-400">Solicitante<span className="mt-1 block text-slate-200">{record.requester}</span></p><p className="text-slate-400">Status / prioridade<span className="mt-1 block text-slate-200">{record.status} · {record.priority}</span></p><p className="text-slate-400">Categoria<span className="mt-1 block text-slate-200">{record.category}</span></p>{'ticket_number' in record && <p className="text-slate-400">Prazo<span className="mt-1 block text-slate-200">{record.due_at || 'Não definido'}</span></p>}<p className="whitespace-pre-wrap text-slate-300 sm:col-span-2">{record.description || 'Sem descrição cadastrada.'}</p></div><div className="mt-5 flex justify-end gap-2"><button type="button" onClick={() => setRecord(null)} className="rounded-lg px-3 py-2 text-xs text-slate-300">Fechar</button>{canUpdate && <button type="button" onClick={() => setEditingRecord(true)} className="inline-flex items-center gap-1.5 rounded-lg bg-cyan-500 px-3 py-2 text-xs font-semibold text-slate-950"><Pencil className="size-3.5" />Editar</button>}</div></>}
+      </form> : <><div className="grid gap-4 text-sm sm:grid-cols-2"><p className="text-slate-400">Solicitante<span className="mt-1 block text-slate-200">{record.requester}</span></p><p className="text-slate-400">Status / prioridade<span className="mt-1 block text-slate-200">{record.status} · {record.priority}</span></p><p className="text-slate-400">Categoria<span className="mt-1 block text-slate-200">{record.category}</span></p>{'ticket_number' in record && <>
+        <p className="text-slate-400">Prazo<span className="mt-1 block text-slate-200">{record.due_at ? new Date(record.due_at).toLocaleString('pt-BR') : 'Não definido'}</span></p>
+        <p className="text-slate-400">Horário agendado<span className="mt-1 block text-slate-200">{record.scheduled_at ? new Date(record.scheduled_at).toLocaleString('pt-BR') : 'Não definido'}</span></p>
+        <p className="text-slate-400">Resolvido em<span className="mt-1 block text-slate-200">{record.resolved_at ? new Date(record.resolved_at).toLocaleString('pt-BR') : '—'}</span></p>
+        <p className="whitespace-pre-wrap text-slate-300 sm:col-span-2">Descrição: {record.description || 'Sem descrição cadastrada.'}</p>
+        <p className="whitespace-pre-wrap text-slate-300 sm:col-span-2">Resolução: {record.resolution || 'Ainda não informada.'}</p>
+      </>}
+      {'ticket_number' in record ? null : <p className="whitespace-pre-wrap text-slate-300 sm:col-span-2">{record.description || 'Sem descrição cadastrada.'}</p>}
+      </div><div className="mt-5 flex justify-end gap-2"><button type="button" onClick={() => setRecord(null)} className="rounded-lg px-3 py-2 text-xs text-slate-300">Fechar</button>{canUpdate && <button type="button" onClick={() => setEditingRecord(true)} className="inline-flex items-center gap-1.5 rounded-lg bg-cyan-500 px-3 py-2 text-xs font-semibold text-slate-950"><Pencil className="size-3.5" />Editar</button>}</div></>}
       {error && <p role="alert" className="mt-4 rounded-lg bg-amber-400/10 p-3 text-xs text-amber-300">{error}</p>}
     </div></div>}
   </section>
