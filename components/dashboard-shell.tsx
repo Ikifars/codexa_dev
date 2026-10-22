@@ -178,7 +178,7 @@ function DashboardContent({ initialSection = 'Dashboard', page, permissions, pro
     setNotificationsError('')
     try {
       const { data, error } = await createClient().from('notifications')
-        .select('id,message,notification_type,read_at,created_at')
+        .select('id,message,notification_type,entity_type,entity_id,link_path,read_at,created_at')
         .order('created_at', { ascending: false })
         .limit(30)
       if (error) {
