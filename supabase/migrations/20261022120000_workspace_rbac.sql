@@ -54,7 +54,8 @@ with role_grants(role_name, grants) as (
       'dashboard_comercial:view','leads:view','leads:create','leads:update','leads:change_status',
       'clients:view','clients:create','clients:update','contacts:view','contacts:create','contacts:update',
       'proposals:view','proposals:create','proposals:update','proposals:change_status',
-      'contracts:view','projects:view','reports_commercial:view','reports_commercial:export',
+      'contracts:view','contracts:create','attachments:upload','attachments:download',
+      'projects:view','reports_commercial:view','reports_commercial:export',
       'profile:view','profile:update','notifications:view','notifications:update'
     ]),
     ('Operacional', array[
@@ -423,12 +424,16 @@ security invoker
 set search_path = public, auth, pg_temp
 as $$
 begin
-  if tg_table_name in ('leads', 'clients') and new.owner_id is null
-    and public.has_workspace_permission(tg_table_name, 'create') then
-    new.owner_id := public.current_team_member_id();
-  elsif tg_table_name in ('proposals', 'contracts') and new.responsible_id is null
-    and public.has_workspace_permission(tg_table_name, 'create') then
-    new.responsible_id := public.current_team_member_id();
+  if tg_table_name in ('leads', 'clients') then
+    if new.owner_id is null
+      and public.has_workspace_permission(tg_table_name, 'create') then
+      new.owner_id := public.current_team_member_id();
+    end if;
+  elsif tg_table_name in ('proposals', 'contracts') then
+    if new.responsible_id is null
+      and public.has_workspace_permission(tg_table_name, 'create') then
+      new.responsible_id := public.current_team_member_id();
+    end if;
   end if;
   return new;
 end;

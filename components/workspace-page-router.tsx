@@ -18,16 +18,16 @@ function ModuleFallback({ label }: { label: string }) {
 
 export function WorkspacePageRouter({ module, permissions, profileName }: { module: string; permissions: string[]; profileName: string }) {
   const label = workspaceLabel(module)
-  if (module === 'leads' || module === 'clientes' || module === 'contatos') return <CrmWorkspace initialModule={module === 'clientes' ? 'clients' : module === 'contatos' ? 'messages' : 'leads'} />
-  if (module === 'propostas' || module === 'contratos') return <CommercialWorkspace initialTab={module === 'contratos' ? 'contracts' : 'proposals'} />
+  if (module === 'leads' || module === 'clientes' || module === 'contatos') return <CrmWorkspace initialModule={module === 'clientes' ? 'clients' : module === 'contatos' ? 'messages' : 'leads'} permissions={permissions} />
+  if (module === 'propostas' || module === 'contratos') return <CommercialWorkspace initialTab={module === 'contratos' ? 'contracts' : 'proposals'} permissions={permissions} />
   if (module === 'projetos' || module === 'tarefas' || module === 'solicitacoes' || module === 'suporte') return <OperationsWorkspace permissions={permissions} initialModule={module === 'tarefas' ? 'projects' : module === 'solicitacoes' ? 'change_requests' : module === 'suporte' ? 'support_tickets' : 'projects'} />
   if (module === 'sistemas' || module === 'modulos') return <CatalogWorkspace initialTab={module === 'modulos' ? 'modules' : 'systems'} />
   if (module === 'licencas') return <LicenseWorkspace />
   if (module === 'papeis-e-permissoes') return <RoleManagementWorkspace />
   if (module === 'usuarios') return <RoleManagementWorkspace initialView="users" />
-  if (module === 'contas-a-receber') return <FinanceWorkspace initialTab="receivable" />
-  if (module === 'contas-a-pagar') return <FinanceWorkspace initialTab="payable" />
-  if (module === 'fluxo-de-caixa' || module === 'transacoes' || module === 'categorias-financeiras') return <FinanceWorkspace initialTab="overview" />
+  if (module === 'contas-a-receber') return <FinanceWorkspace initialTab="receivable" permissions={permissions} />
+  if (module === 'contas-a-pagar') return <FinanceWorkspace initialTab="payable" permissions={permissions} />
+  if (module === 'fluxo-de-caixa' || module === 'transacoes' || module === 'categorias-financeiras') return <FinanceWorkspace initialTab="overview" permissions={permissions} />
   if (module === 'meu-perfil') return <AccountWorkspace section="Meu perfil" initialName={profileName} />
   if (module === 'aparencia') return <AccountWorkspace section="Aparência" />
   if (module === 'equipe' || module === 'relatorios' || module === 'configuracoes') return <AdminWorkspace section={label} />

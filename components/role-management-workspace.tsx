@@ -1,7 +1,7 @@
 'use client'
 
 import { FormEvent, useEffect, useMemo, useState } from 'react'
-import { Loader2, Pencil, Plus, Save, Search, Shield, Users } from 'lucide-react'
+import { Eye, Loader2, Pencil, Plus, Save, Search, Shield, Users, X } from 'lucide-react'
 
 type Permission = { id: string; module_name: string; action_name: string }
 type Role = {
@@ -102,6 +102,7 @@ export function RoleManagementWorkspace({ initialView = 'roles' }: { initialView
   const [creatingRole, setCreatingRole] = useState(false)
   const [inviteOpen, setInviteOpen] = useState(false)
   const [editingMember, setEditingMember] = useState<Member | null>(null)
+  const [memberDetails, setMemberDetails] = useState<Member | null>(null)
   const [roleName, setRoleName] = useState('')
   const [roleDescription, setRoleDescription] = useState('')
   const [roleActive, setRoleActive] = useState(true)
@@ -363,13 +364,25 @@ export function RoleManagementWorkspace({ initialView = 'roles' }: { initialView
                 <td className="px-4 py-3"><select aria-label={`Cargo de ${member.full_name}`} disabled={self} value={member.role_name} onChange={(event) => void updateMember(member, { roleName: event.target.value })} className="rounded-lg border border-white/[0.08] bg-[#0d1118] px-2 py-2 text-xs text-slate-200 disabled:opacity-50">{roles.filter((item) => item.is_active).map((item) => <option key={item.id} value={item.name}>{item.name}</option>)}</select></td>
                 <td className="px-4 py-3"><select aria-label={`Status de ${member.full_name}`} disabled={self} value={member.status.replace(/['"]/g, '').trim().toLowerCase() === 'ativo' || member.status.toLowerCase() === 'active' ? 'Ativo' : 'Inativo'} onChange={(event) => void updateMember(member, { status: event.target.value })} className="rounded-lg border border-white/[0.08] bg-[#0d1118] px-2 py-2 text-xs text-slate-200 disabled:opacity-50"><option value="Ativo">Ativo</option><option value="Inativo">Inativo</option></select></td>
                 <td className="px-4 py-3 text-xs text-slate-500">{new Date(member.created_at).toLocaleDateString('pt-BR')}</td>
-                <td className="px-4 py-3"><button disabled={self} onClick={() => setEditingMember(member)} className="inline-flex items-center gap-1.5 rounded-lg border border-white/[0.08] px-2.5 py-2 text-xs text-slate-300 hover:bg-white/[0.04] disabled:cursor-not-allowed disabled:opacity-40"><Pencil className="size-3.5" />Editar</button></td>
+                <td className="px-4 py-3"><div className="flex gap-1.5"><button type="button" onClick={() => setMemberDetails(member)} className="inline-flex items-center gap-1.5 rounded-lg border border-white/[0.08] px-2.5 py-2 text-xs text-slate-300 hover:bg-white/[0.04]"><Eye className="size-3.5" />Detalhes</button><button type="button" disabled={self} onClick={() => { setEditingMember(member); setMemberDetails(null) }} className="inline-flex items-center gap-1.5 rounded-lg border border-white/[0.08] px-2.5 py-2 text-xs text-slate-300 hover:bg-white/[0.04] disabled:cursor-not-allowed disabled:opacity-40"><Pencil className="size-3.5" />Editar</button></div></td>
               </tr>
             })}</tbody>
           </table>
           {!members.length && <div className="p-10 text-center text-sm text-slate-500">Nenhum membro cadastrado.</div>}
         </div>
         <p className="text-[11px] text-slate-600">Criações, edições, alterações de cargo/status são auditadas. Um usuário não pode alterar a própria conta ou desativar o último administrador.</p>
+      </div>}
+      {memberDetails && <div className="fixed inset-0 z-50 grid place-items-center bg-black/70 p-4" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setMemberDetails(null) }}>
+        <section role="dialog" aria-modal="true" aria-labelledby="member-details-title" className="w-full max-w-lg rounded-xl border border-white/[0.08] bg-[#11161e] p-5 shadow-2xl">
+          <div className="flex items-start justify-between gap-4"><div><p className="text-xs uppercase tracking-wider text-blue-300">Usuário</p><h2 id="member-details-title" className="mt-1 text-lg font-semibold text-white">{memberDetails.full_name}</h2></div><button type="button" onClick={() => setMemberDetails(null)} aria-label="Fechar detalhes"><X className="size-5 text-slate-400" /></button></div>
+          <dl className="mt-5 grid gap-4 text-sm sm:grid-cols-2">
+            <div><dt className="text-xs text-slate-500">E-mail</dt><dd className="mt-1 break-all text-slate-200">{memberDetails.email}</dd></div>
+            <div><dt className="text-xs text-slate-500">Cargo</dt><dd className="mt-1 text-slate-200">{memberDetails.role_name}</dd></div>
+            <div><dt className="text-xs text-slate-500">Status</dt><dd className="mt-1 text-slate-200">{memberDetails.status}</dd></div>
+            <div><dt className="text-xs text-slate-500">Criado em</dt><dd className="mt-1 text-slate-200">{new Date(memberDetails.created_at).toLocaleDateString('pt-BR')}</dd></div>
+          </dl>
+          <div className="mt-6 flex justify-end gap-2"><button type="button" onClick={() => setMemberDetails(null)} className="rounded-lg px-3 py-2 text-xs text-slate-300">Fechar</button><button type="button" disabled={memberDetails.user_id === currentUserId} onClick={() => { setEditingMember(memberDetails); setMemberDetails(null) }} className="inline-flex items-center gap-1.5 rounded-lg bg-blue-500 px-3 py-2 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40"><Pencil className="size-3.5" />Editar</button></div>
+        </section>
       </div>}
   </section>
 }
