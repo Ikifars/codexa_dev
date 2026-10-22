@@ -23,9 +23,12 @@ type Project = {
 
 type ProjectTask = {
   id: string
-  project_id: string
+  project_id: string | null
+  title?: string
   status: string
   due_date: string | null
+  received_from_user_id?: string | null
+  received_via?: string | null
 }
 
 type Client = { id: string; legal_name: string; trade_name: string | null }
@@ -63,6 +66,7 @@ export function ProjectListWorkspace({ onSwitchModule, permissions }: { onSwitch
   const router = useRouter()
   const [projects, setProjects] = useState<Project[]>([])
   const [tasks, setTasks] = useState<ProjectTask[]>([])
+  const [receivedTasks, setReceivedTasks] = useState<ProjectTask[]>([])
   const [clients, setClients] = useState<Client[]>([])
   const [members, setMembers] = useState<TeamMember[]>([])
   const [loading, setLoading] = useState(true)
@@ -81,11 +85,13 @@ export function ProjectListWorkspace({ onSwitchModule, permissions }: { onSwitch
     setLoading(true)
     setError('')
     const supabase = createClient()
-    const [projectResult, taskResult, clientResult, memberResult] = await Promise.all([
+    const { data: authData } = await supabase.auth.getUser()
+    const [projectResult, taskResult, clientResult, memberResult, receivedResult] = await Promise.all([
       supabase.from('projects').select('id,name,description,status,priority,due_date,completed_at,created_at,client_id,responsible_id,client:clients(id,legal_name,trade_name)').order('created_at', { ascending: false }),
       supabase.from('project_tasks').select('id,project_id,status,due_date').order('created_at', { ascending: true }),
       supabase.from('clients').select('id,legal_name,trade_name').order('legal_name'),
       supabase.from('team_members').select('id,user_id,full_name,email,status').order('full_name'),
+      authData.user ? supabase.from('project_tasks').select('id,project_id,title,status,due_date,received_from_user_id,received_via').is('project_id', null).or(`responsible_id.eq.${authData.user.id},participants.cs.{${authData.user.id}}`).order('created_at', { ascending: false }) : Promise.resolve({ data: [], error: null }),
     ])
 
     const failed = projectResult.error || taskResult.error
@@ -98,6 +104,7 @@ export function ProjectListWorkspace({ onSwitchModule, permissions }: { onSwitch
     const auxiliaryErrors = [clientResult.error, memberResult.error].filter(Boolean).map((item) => item.message)
     setProjects((projectResult.data ?? []) as Project[])
     setTasks((taskResult.data ?? []) as ProjectTask[])
+    setReceivedTasks((receivedResult.data ?? []) as ProjectTask[])
     setClients((clientResult.data ?? []) as Client[])
     setMembers((memberResult.data ?? []) as TeamMember[])
     if (auxiliaryErrors.length) setError(auxiliaryErrors.join(' · '))
@@ -119,7 +126,7 @@ export function ProjectListWorkspace({ onSwitchModule, permissions }: { onSwitch
     const uniqueTasks = new Map(tasks.map((task) => [task.id, task]))
     const counts = new Map<string, { total: number; done: number; overdue: number }>()
     for (const task of uniqueTasks.values()) {
-      if (isCanceled(task.status)) continue
+      if (isCanceled(task.status) || !task.project_id) continue
       const count = counts.get(task.project_id) ?? { total: 0, done: 0, overdue: 0 }
       count.total += 1
       if (isDone(task.status)) count.done += 1
@@ -231,6 +238,7 @@ export function ProjectListWorkspace({ onSwitchModule, permissions }: { onSwitch
       </div>
 
       {error && <div role="alert" className="flex items-start justify-between gap-3 rounded-lg border border-rose-400/20 bg-rose-400/5 px-4 py-3 text-sm text-rose-200"><span>{error}</span><button onClick={() => setError('')} aria-label="Fechar aviso"><X className="size-4" /></button></div>}
+      {receivedTasks.length > 0 && <section className="rounded-xl border border-violet-400/20 bg-violet-400/5 p-4"><div className="flex flex-wrap items-center justify-between gap-2"><div><h2 className="text-sm font-semibold text-violet-100">Atividades recebidas</h2><p className="mt-1 text-xs text-violet-200/70">Tasks compartilhadas ou transferidas, sem vínculo ao projeto original.</p></div><span className="rounded-full bg-violet-400/15 px-2 py-1 text-xs text-violet-200">{receivedTasks.length}</span></div><div className="mt-3 grid gap-2 sm:grid-cols-2">{receivedTasks.map((task) => <div key={task.id} className="rounded-lg border border-violet-300/10 bg-[#11161e] p-3"><div className="flex items-start justify-between gap-2"><p className="text-sm font-medium text-slate-100">{task.title || 'Atividade recebida'}</p><span className="shrink-0 rounded bg-violet-400/10 px-2 py-1 text-[10px] text-violet-200">{task.received_via?.includes('transfer') ? 'Transferida' : 'Compartilhada'}</span></div><p className="mt-2 text-xs text-slate-400">Disponível no seu kanban pessoal · {task.status}</p></div>)}</div></section>}
       {loading ? (
         <div className="flex min-h-48 items-center justify-center rounded-xl border border-white/[0.07] bg-[#11161e] text-sm text-slate-400"><Loader2 className="mr-2 size-4 animate-spin" />Carregando projetos...</div>
       ) : filteredProjects.length === 0 ? (
