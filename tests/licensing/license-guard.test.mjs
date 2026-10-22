@@ -71,6 +71,7 @@ test('fails closed when the service is unreachable and requires HTTPS remotely',
 test('recognizes only catalog statuses that make a module available', () => {
   assert.equal(isModuleAvailable('Licença válida'), true)
   assert.equal(isModuleAvailable('Contratado'), true)
+  assert.equal(isModuleAvailable('Acesso liberado'), true)
   assert.equal(isModuleAvailable('Indisponível'), false)
   assert.equal(isModuleAvailable(null), false)
 })

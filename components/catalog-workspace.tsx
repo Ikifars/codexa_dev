@@ -32,13 +32,18 @@ export function CatalogWorkspace({ initialTab = 'systems' }: { initialTab?: stri
     setLoading(true)
     const supabase = createClient()
     const [clientsResult, systemsResult, modulesResult] = await Promise.all([
-      supabase.from('clients').select('id,name').order('name'),
+      supabase.from('clients').select('id,legal_name,trade_name').order('legal_name'),
       supabase.from('systems').select('id,name,internal_code,description,client_id,access_type,operational_status,production_url,started_at,delivered_at,contract_id,plan_id,observations').order('name'),
       supabase.from('system_modules').select('id,system_id,name,internal_code,description,category,icon,access_url,access_type,implementation_status,availability_status,observations').order('name'),
     ])
     const firstError = clientsResult.error ?? systemsResult.error ?? modulesResult.error
-    setError(firstError ? 'Não foi possível carregar o catálogo. Verifique sua sessão e as permissões.' : '')
-    setClients((clientsResult.data ?? []) as Client[])
+    setError(clientsResult.error
+      ? `Não foi possível carregar os clientes: ${clientsResult.error.message}`
+      : firstError ? 'Não foi possível carregar o catálogo. Verifique sua sessão e as permissões.' : '')
+    setClients(((clientsResult.data ?? []) as { id: string; legal_name: string; trade_name: string | null }[]).map((client) => ({
+      id: client.id,
+      name: client.trade_name || client.legal_name,
+    })))
     setSystems((systemsResult.data ?? []) as System[])
     setModules((modulesResult.data ?? []) as Module[])
     setLoading(false)
