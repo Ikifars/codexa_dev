@@ -135,6 +135,7 @@ function DashboardContent({ initialSection = 'Dashboard', page, permissions, pro
   const [notifications, setNotifications] = useState<WorkspaceNotification[]>([])
   const [notificationsLoading, setNotificationsLoading] = useState(false)
   const [notificationsError, setNotificationsError] = useState('')
+  const [actionableNotificationIds, setActionableNotificationIds] = useState<string[]>([])
   const searchInput = useRef<HTMLInputElement>(null)
   const displayName = profileName.trim() || 'Usuário'
   const initials = displayName.split(/\s+/).slice(0, 2).map((part) => part[0]).join('').toUpperCase()
@@ -184,7 +185,16 @@ function DashboardContent({ initialSection = 'Dashboard', page, permissions, pro
       if (error) {
         console.error('Workspace notifications load failed:', error.message)
         setNotificationsError('Não foi possível carregar as notificações.')
-      } else setNotifications(data ?? [])
+      } else {
+        setNotifications(data ?? [])
+        const user = (await createClient().auth.getUser()).data.user
+        if (user) {
+          const loadedNotifications = (data ?? []) as WorkspaceNotification[]
+        const taskIds = loadedNotifications.filter((item: WorkspaceNotification) => item.notification_type === 'task_share' || item.notification_type === 'task_transfer').map((item: WorkspaceNotification) => item.entity_id).filter(Boolean)
+          const pending = taskIds.length ? await createClient().from('task_transfer_requests').select('task_id').eq('target_id', user.id).eq('status', 'pending').in('task_id', taskIds) : { data: [] }
+          setActionableNotificationIds(((pending.data ?? []) as { task_id: string }[]).map((item) => loadedNotifications.find((notification: WorkspaceNotification) => notification.entity_id === item.task_id)?.id).filter(Boolean) as string[])
+        }
+      }
     } catch (error) {
       console.error('Workspace notifications request failed:', error)
       setNotificationsError('Não foi possível carregar as notificações.')
@@ -321,7 +331,7 @@ function DashboardContent({ initialSection = 'Dashboard', page, permissions, pro
                   {notificationsLoading ? <p className="px-4 py-8 text-center text-xs text-slate-500">Carregando notificações...</p>
                     : notifications.length ? notifications.map((notification) => <div key={notification.id} className={`flex gap-3 border-b border-white/[0.05] px-4 py-3 last:border-0 hover:bg-white/[0.04] ${notification.read_at ? 'opacity-70' : ''}`}>
                       <span className={`mt-1.5 size-2 shrink-0 rounded-full ${notification.read_at ? 'bg-slate-600' : 'bg-blue-400'}`} />
-                      <div className="min-w-0 flex-1"><button type="button" onClick={() => { void markNotificationRead(notification); if (notification.link_path) router.push(notification.link_path) }} className="block w-full text-left"><span className="block text-xs leading-5 text-slate-200">{notification.message}</span><span className="mt-1 block text-[10px] text-slate-500">{new Date(notification.created_at).toLocaleString('pt-BR')}</span></button>{notification.notification_type === 'task_share' || notification.notification_type === 'task_transfer' ? <div className="mt-2 flex gap-2"><button type="button" onClick={() => void respondToTaskNotification(notification, 'accepted')} className="rounded bg-emerald-500/15 px-2 py-1 text-[11px] font-medium text-emerald-300 hover:bg-emerald-500/25">Aceitar</button><button type="button" onClick={() => void respondToTaskNotification(notification, 'rejected')} className="rounded bg-rose-500/15 px-2 py-1 text-[11px] font-medium text-rose-300 hover:bg-rose-500/25">Rejeitar</button></div> : null}</div>
+                      <div className="min-w-0 flex-1"><button type="button" onClick={() => { void markNotificationRead(notification); if (notification.link_path) router.push(notification.link_path) }} className="block w-full text-left"><span className="block text-xs leading-5 text-slate-200">{notification.message}</span><span className="mt-1 block text-[10px] text-slate-500">{new Date(notification.created_at).toLocaleString('pt-BR')}</span></button>{actionableNotificationIds.includes(notification.id) && !notification.notification_type.startsWith('task_admin_') ? <div className="mt-2 flex gap-2"><button type="button" onClick={() => void respondToTaskNotification(notification, 'accepted')} className="rounded bg-emerald-500/15 px-2 py-1 text-[11px] font-medium text-emerald-300 hover:bg-emerald-500/25">Aceitar</button><button type="button" onClick={() => void respondToTaskNotification(notification, 'rejected')} className="rounded bg-rose-500/15 px-2 py-1 text-[11px] font-medium text-rose-300 hover:bg-rose-500/25">Rejeitar</button></div> : null}</div>
                     </div>)
                     : !notificationsError && <p className="px-4 py-8 text-center text-xs text-slate-500">Nenhuma notificação encontrada.</p>}
                 </div>

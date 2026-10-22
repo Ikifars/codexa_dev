@@ -45,7 +45,7 @@ export function TaskSharing({ taskId, projectId, currentUserId, responsibleId, o
         adminError = result.error?.message ?? update.error?.message ?? null
       }
       if (adminError) { setMessage('Não foi possível aplicar a ação administrativa.'); setBusy(false); return }
-      await supabase.from('notifications').insert({ recipient_id: target, notification_type: `task_admin_${requestType}`, message: `Um administrador ${requestType === 'share' ? 'compartilhou' : 'transferiu'} uma atividade para você.`, entity_type: 'task', entity_id: taskId, link_path: `/workspace/projetos/${projectId}` })
+      if (target !== currentUserId) await supabase.from('notifications').insert({ recipient_id: target, notification_type: `task_admin_${requestType}`, message: `Um administrador ${requestType === 'share' ? 'compartilhou' : 'transferiu'} uma atividade para você.`, entity_type: 'task', entity_id: taskId, link_path: `/workspace/projetos/${projectId}` })
       setMessage('Ação administrativa aplicada.'); setTarget(''); await load(); onChanged?.()
     } else {
       const { error } = await supabase.from('task_transfer_requests').insert({ task_id: taskId, requester_id: currentUserId, target_id: target, request_type: requestType })
