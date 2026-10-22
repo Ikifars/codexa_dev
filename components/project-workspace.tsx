@@ -23,7 +23,9 @@ type Project = {
 
 type ProjectTask = {
   id: string
-  project_id: string
+  project_id: string | null
+  received_from_user_id?: string | null
+  received_via?: string | null
   title: string
   description: string | null
   status: string

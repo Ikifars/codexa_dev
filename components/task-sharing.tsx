@@ -36,22 +36,22 @@ export function TaskSharing({ taskId, projectId, currentUserId, responsibleId, o
     if (isAdmin) {
       let adminError: string | null = null
       if (requestType === 'transfer') {
-        const result = await supabase.from('project_tasks').update({ responsible_id: target }).eq('id', taskId)
+        const result = await supabase.from('project_tasks').update({ responsible_id: target, project_id: null, received_from_user_id: currentUserId, received_via: 'admin_transfer' }).eq('id', taskId)
         adminError = result.error?.message ?? null
       } else {
         const result = await supabase.from('project_tasks').select('participants').eq('id', taskId).maybeSingle()
         const current = Array.isArray(result.data?.participants) ? result.data.participants : []
-        const update = await supabase.from('project_tasks').update({ participants: Array.from(new Set([...current, target])) }).eq('id', taskId)
+        const update = await supabase.from('project_tasks').update({ participants: Array.from(new Set([...current, target])), project_id: null, received_from_user_id: currentUserId, received_via: 'admin_share' }).eq('id', taskId)
         adminError = result.error?.message ?? update.error?.message ?? null
       }
       if (adminError) { setMessage('Não foi possível aplicar a ação administrativa.'); setBusy(false); return }
-      if (target !== currentUserId) await supabase.from('notifications').insert({ recipient_id: target, notification_type: `task_admin_${requestType}`, message: `Um administrador ${requestType === 'share' ? 'compartilhou' : 'transferiu'} uma atividade para você.`, entity_type: 'task', entity_id: taskId, link_path: `/workspace/projetos/${projectId}` })
+      if (target !== currentUserId) await supabase.from('notifications').insert({ recipient_id: target, notification_type: `task_admin_${requestType}`, message: `Um administrador ${requestType === 'share' ? 'compartilhou' : 'transferiu'} uma atividade para você.`, entity_type: 'task', entity_id: taskId, link_path: '/workspace/projetos' })
       setMessage('Ação administrativa aplicada.'); setTarget(''); await load(); onChanged?.()
     } else {
       const { error } = await supabase.from('task_transfer_requests').insert({ task_id: taskId, requester_id: currentUserId, target_id: target, request_type: requestType })
       if (error) setMessage('Não foi possível enviar a solicitação.')
       else {
-        await supabase.from('notifications').insert({ recipient_id: target, notification_type: `task_${requestType}`, message: `Você recebeu uma solicitação de ${requestType === 'share' ? 'compartilhamento' : 'transferência'} de task.`, entity_type: 'task', entity_id: taskId, link_path: `/workspace/projetos/${projectId}` })
+        await supabase.from('notifications').insert({ recipient_id: target, notification_type: `task_${requestType}`, message: `Você recebeu uma solicitação de ${requestType === 'share' ? 'compartilhamento' : 'transferência'} de task.`, entity_type: 'task', entity_id: taskId, link_path: '/workspace/projetos' })
         setMessage('Solicitação enviada para consentimento.'); setTarget(''); await load(); onChanged?.()
       }
     }
@@ -63,14 +63,14 @@ export function TaskSharing({ taskId, projectId, currentUserId, responsibleId, o
     const { error } = await supabase.from('task_transfer_requests').update({ status, responded_at: new Date().toISOString() }).eq('id', item.id).eq('target_id', currentUserId)
     if (!error && status === 'accepted') {
       if (item.request_type === 'transfer') {
-        await supabase.from('project_tasks').update({ responsible_id: currentUserId }).eq('id', taskId)
+        await supabase.from('project_tasks').update({ responsible_id: currentUserId, project_id: null, received_from_user_id: item.requester_id, received_via: 'transfer' }).eq('id', taskId)
       } else {
         const task = await supabase.from('project_tasks').select('participants').eq('id', taskId).maybeSingle()
         const current = Array.isArray(task.data?.participants) ? task.data.participants : []
-        await supabase.from('project_tasks').update({ participants: Array.from(new Set([...current, currentUserId])) }).eq('id', taskId)
+        await supabase.from('project_tasks').update({ participants: Array.from(new Set([...current, currentUserId])), project_id: null, received_from_user_id: item.requester_id, received_via: 'share' }).eq('id', taskId)
       }
     }
-    if (!error) { await supabase.from('notifications').insert({ recipient_id: item.requester_id, notification_type: `task_${status}`, message: `Sua solicitação de ${item.request_type === 'share' ? 'compartilhamento' : 'transferência'} foi ${status === 'accepted' ? 'aceita' : 'recusada'}.`, entity_type: 'task', entity_id: taskId, link_path: `/workspace/projetos/${projectId}` }); await load(); onChanged?.() }
+    if (!error) { await supabase.from('notifications').insert({ recipient_id: item.requester_id, notification_type: `task_${status}`, message: `Sua solicitação de ${item.request_type === 'share' ? 'compartilhamento' : 'transferência'} foi ${status === 'accepted' ? 'aceita' : 'recusada'}.`, entity_type: 'task', entity_id: taskId, link_path: '/workspace/projetos' }); await load(); onChanged?.() }
     else setMessage('Não foi possível responder à solicitação.')
     setBusy(false)
   }
