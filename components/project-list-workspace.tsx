@@ -69,6 +69,7 @@ export function ProjectListWorkspace({ onSwitchModule, permissions }: { onSwitch
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [query, setQuery] = useState('')
+  const [dateFilter, setDateFilter] = useState(new Date().toISOString().slice(0, 10))
   const [statusFilter, setStatusFilter] = useState('')
   const [priorityFilter, setPriorityFilter] = useState('')
   const [clientFilter, setClientFilter] = useState('')
@@ -133,7 +134,8 @@ export function ProjectListWorkspace({ onSwitchModule, permissions }: { onSwitch
     const result = projects.filter((project) => {
       const responsible = project.responsible_id ? membersById.get(project.responsible_id) : null
       const clientName = project.client?.trade_name || project.client?.legal_name || ''
-      return (!term || normalized(`${project.name} ${project.description ?? ''} ${clientName} ${responsible?.full_name ?? ''}`).includes(term))
+      return (!dateFilter || project.created_at.slice(0, 10) === dateFilter)
+        && (!term || normalized(`${project.name} ${project.description ?? ''} ${clientName} ${responsible?.full_name ?? ''}`).includes(term))
         && (!statusFilter || project.status === statusFilter)
         && (!priorityFilter || project.priority === priorityFilter)
         && (!clientFilter || project.client_id === clientFilter)
@@ -145,7 +147,7 @@ export function ProjectListWorkspace({ onSwitchModule, permissions }: { onSwitch
       if (sortBy === 'priority') return ['urgente', 'alta', 'media', 'baixa'].indexOf(normalized(a.priority)) - ['urgente', 'alta', 'media', 'baixa'].indexOf(normalized(b.priority))
       return b.created_at.localeCompare(a.created_at)
     })
-  }, [clientFilter, membersById, priorityFilter, projects, query, responsibleFilter, sortBy, statusFilter])
+  }, [clientFilter, dateFilter, membersById, priorityFilter, projects, query, responsibleFilter, sortBy, statusFilter])
 
   async function createProject(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -204,6 +206,7 @@ export function ProjectListWorkspace({ onSwitchModule, permissions }: { onSwitch
             <Search className="size-4 shrink-0 text-slate-500" />
             <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar projetos, clientes..." className="min-w-0 flex-1 bg-transparent text-sm text-slate-200 outline-none placeholder:text-slate-500" aria-label="Buscar projetos" />
           </label>
+          <label className="field flex items-center gap-2 text-sm text-slate-400">Data<input type="date" value={dateFilter} onChange={(event) => setDateFilter(event.target.value)} className="min-w-0 bg-transparent text-slate-200 outline-none" aria-label="Filtrar por data" /></label>
           <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} className="field" aria-label="Filtrar por status">
             <option value="">Todos os status</option>{statusOptions.map((value) => <option key={value}>{value}</option>)}
           </select>
