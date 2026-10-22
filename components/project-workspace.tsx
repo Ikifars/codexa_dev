@@ -4,7 +4,8 @@ import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { EntityAttachments } from '@/components/entity-attachments'
-import { ArrowLeft, BriefcaseBusiness, CalendarDays, CheckCircle2, CircleAlert, ClipboardList, Clock3, FileText, Flag, FolderKanban, GripVertical, Loader2, MessageSquare, MoreHorizontal, Paperclip, Plus, Save, Send, Trash2, Users, X } from 'lucide-react'
+import { TaskSharing } from '@/components/task-sharing'
+import { ArrowLeft, BriefcaseBusiness, CalendarDays, CheckCircle2, CircleAlert, ClipboardList, Clock3, FileText, Flag, FolderKanban, GripVertical, Loader2, MessageSquare, MoreHorizontal, Paperclip, Plus, Search, Save, Send, Trash2, Users, X } from 'lucide-react'
 
 type Project = {
   id: string
@@ -22,7 +23,9 @@ type Project = {
 
 type ProjectTask = {
   id: string
-  project_id: string
+  project_id: string | null
+  received_from_user_id?: string | null
+  received_via?: string | null
   title: string
   description: string | null
   status: string
@@ -31,6 +34,7 @@ type ProjectTask = {
   responsible_id: string | null
   created_at: string
   updated_at: string
+  participants?: string[] | null
 }
 
 type TeamMember = { id: string; user_id: string | null; full_name: string; email: string; status: string }
@@ -103,6 +107,8 @@ export function ProjectWorkspace({ projectId }: { projectId: string }) {
   const [error, setError] = useState('')
   const [tab, setTab] = useState<Tab>('overview')
   const [taskFilter, setTaskFilter] = useState({ responsible: '', priority: '', deadline: '' })
+  const [taskQuery, setTaskQuery] = useState('')
+  const [taskDate, setTaskDate] = useState(new Date().toISOString().slice(0, 10))
   const [editProjectOpen, setEditProjectOpen] = useState(false)
   const [taskModal, setTaskModal] = useState<{ open: boolean; task: ProjectTask | null; status: string }>({ open: false, task: null, status: 'Backlog' })
   const [taskSaving, setTaskSaving] = useState(false)
@@ -119,13 +125,13 @@ export function ProjectWorkspace({ projectId }: { projectId: string }) {
   const loadData = useCallback(async () => {
     setLoading(true)
     setError('')
-    const [projectResult, taskResult, memberResult, clientResult, activityResult, userResult] = await Promise.all([
+    const { data: authData } = await supabase.auth.getUser()
+    const [projectResult, taskResult, memberResult, clientResult, activityResult] = await Promise.all([
       supabase.from('projects').select('id,name,description,status,priority,due_date,completed_at,created_at,client_id,responsible_id,client:clients(id,legal_name,trade_name)').eq('id', projectId).maybeSingle(),
-      supabase.from('project_tasks').select('id,project_id,title,description,status,priority,due_date,responsible_id,created_at,updated_at').eq('project_id', projectId).order('created_at', { ascending: true }),
+      supabase.from('project_tasks').select('id,project_id,title,description,status,priority,due_date,responsible_id,participants,created_at,updated_at').eq('project_id', projectId).order('created_at', { ascending: true }),
       supabase.from('team_members').select('id,user_id,full_name,email,status').order('full_name'),
       supabase.from('clients').select('id,legal_name,trade_name').order('legal_name'),
       supabase.from('project_activity').select('id,project_id,task_id,actor_id,event_type,summary,metadata,created_at').eq('project_id', projectId).order('created_at', { ascending: false }).limit(100),
-      supabase.auth.getUser(),
     ])
 
     if (projectResult.error) {
@@ -171,7 +177,7 @@ export function ProjectWorkspace({ projectId }: { projectId: string }) {
     setActivity((activityResult.data ?? []) as ProjectActivity[])
     setActivityError(activityResult.error?.message ?? '')
     if (memberResult.error) setError(memberResult.error.message)
-    setCurrentUserId(userResult.data.user?.id ?? '')
+    setCurrentUserId(authData.user?.id ?? '')
     setLoading(false)
   }, [projectId, supabase])
 
@@ -200,11 +206,13 @@ export function ProjectWorkspace({ projectId }: { projectId: string }) {
   const filteredTasks = useMemo(() => tasks.filter((task) => {
     const member = task.responsible_id ? memberById.get(task.responsible_id) : null
     const isOverdue = Boolean(task.due_date && task.due_date < new Date().toISOString().slice(0, 10) && !isComplete(task.status) && !isCanceled(task.status))
-    return (!taskFilter.responsible || task.responsible_id === taskFilter.responsible)
+    return (!taskDate || task.created_at.slice(0, 10) === taskDate)
+      && (!taskQuery || normalize(`${task.title} ${task.description ?? ''}`).includes(normalize(taskQuery)))
+      && (!taskFilter.responsible || task.responsible_id === taskFilter.responsible)
       && (!taskFilter.priority || task.priority === taskFilter.priority)
       && (!taskFilter.deadline || (taskFilter.deadline === 'overdue' ? isOverdue : taskFilter.deadline === 'has-date' ? Boolean(task.due_date) : !task.due_date))
       && (!taskFilter.responsible || Boolean(member))
-  }), [memberById, taskFilter, tasks])
+  }), [memberById, taskDate, taskFilter, taskQuery, tasks])
 
   const taskStatusCounts = useMemo(() => {
     const counts = new Map<string, number>()
@@ -496,7 +504,7 @@ export function ProjectWorkspace({ projectId }: { projectId: string }) {
       {(tab === 'kanban' || tab === 'tasks') && <section className="space-y-4">
         <div className="flex flex-col gap-3 rounded-xl border border-white/[0.07] bg-[#11161e] p-4 lg:flex-row lg:items-center">
           <p className="mr-auto text-sm font-medium text-slate-300">{tab === 'kanban' ? 'Quadro de execução' : 'Lista detalhada de tarefas'}</p>
-          <select value={taskFilter.responsible} onChange={(event) => setTaskFilter((current) => ({ ...current, responsible: event.target.value }))} className="field lg:w-52" aria-label="Filtrar tarefas por responsável"><option value="">Todos os responsáveis</option>{members.map((member) => <option key={member.user_id || member.id} value={member.user_id || member.id}>{member.full_name}</option>)}</select>
+          <label className="field flex items-center gap-2 lg:w-52"><Search className="size-3.5 text-slate-500" /><input value={taskQuery} onChange={(event) => setTaskQuery(event.target.value)} placeholder="Buscar tasks" className="min-w-0 flex-1 bg-transparent outline-none" aria-label="Buscar tasks" /></label><label className="field flex items-center gap-2"><span className="text-xs text-slate-500">Data</span><input type="date" value={taskDate} onChange={(event) => setTaskDate(event.target.value)} className="min-w-0 bg-transparent text-slate-200 outline-none" aria-label="Filtrar tasks por data" /></label><select value={taskFilter.responsible} onChange={(event) => setTaskFilter((current) => ({ ...current, responsible: event.target.value }))} className="field lg:w-52" aria-label="Filtrar tarefas por responsável"><option value="">Todos os responsáveis</option>{members.map((member) => <option key={member.user_id || member.id} value={member.user_id || member.id}>{member.full_name}</option>)}</select>
           <select value={taskFilter.priority} onChange={(event) => setTaskFilter((current) => ({ ...current, priority: event.target.value }))} className="field lg:w-44" aria-label="Filtrar tarefas por prioridade"><option value="">Todas as prioridades</option>{taskPriorityOptions.map((priority) => <option key={priority}>{priority}</option>)}</select>
           <select value={taskFilter.deadline} onChange={(event) => setTaskFilter((current) => ({ ...current, deadline: event.target.value }))} className="field lg:w-44" aria-label="Filtrar tarefas por prazo"><option value="">Todos os prazos</option><option value="overdue">Atrasadas</option><option value="has-date">Com prazo</option><option value="no-date">Sem prazo</option></select>
         </div>
@@ -601,7 +609,7 @@ export function ProjectWorkspace({ projectId }: { projectId: string }) {
                     <button disabled={commentSaving || !commentBody.trim()} className="flex min-h-9 items-center gap-2 rounded-lg bg-blue-500 px-3 text-sm font-medium text-white hover:bg-blue-400 disabled:opacity-50"><Send className="size-3.5" />{commentSaving ? 'Publicando...' : 'Publicar'}</button>
                   </form>
                 </section>
-                <EntityAttachments entityType="task" entityId={taskModal.task.id} />
+                <EntityAttachments entityType="task" entityId={taskModal.task.id} /><TaskSharing taskId={taskModal.task.id} projectId={projectId} currentUserId={currentUserId} responsibleId={taskModal.task.responsible_id} onChanged={() => void loadData()} />
               </> : <div className="rounded-lg border border-dashed border-white/[0.1] p-4 text-sm leading-6 text-slate-400">Depois de criar a tarefa, você poderá adicionar comentários e anexos persistentes aqui.</div>}
             </div>
           </div>

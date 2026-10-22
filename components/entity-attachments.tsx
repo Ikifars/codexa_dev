@@ -77,8 +77,15 @@ export function EntityAttachments({ entityType, entityId, canUpload = true }: { 
       }
       return
     }
-    const storagePath = `${userData.user.id}/${entityType}/${entityId}/${crypto.randomUUID()}-${file.name}`
-    const uploadResult = await supabase.storage.from('private-documents').upload(storagePath, file, { contentType: file.type || 'application/octet-stream', upsert: false })
+    const safeName = file.name.trim().replace(/[^a-zA-Z0-9._-]/g, '_')
+    const storagePath = `${entityType}/${entityId}/${safeName}`
+    const previous = await supabase.from('entity_attachments').select('id,storage_path').eq('entity_type', entityType).eq('entity_id', entityId).eq('file_name', file.name)
+    const previousItems = (previous.data ?? []) as { id: string; storage_path: string }[]
+    if (previousItems.length) {
+      await supabase.storage.from('private-documents').remove(previousItems.map((item) => item.storage_path))
+      await supabase.from('entity_attachments').delete().in('id', previousItems.map((item) => item.id))
+    }
+    const uploadResult = await supabase.storage.from('private-documents').upload(storagePath, file, { contentType: file.type || 'application/octet-stream', upsert: true })
     if (uploadResult.error) { setMessage(uploadResult.error.message); setUploading(false); return }
     const insertResult = await supabase.from('entity_attachments').insert({ entity_type: entityType, entity_id: entityId, file_name: file.name, storage_path: storagePath, mime_type: file.type || 'application/octet-stream', file_size: file.size, uploaded_by: userData.user.id })
     if (insertResult.error) {

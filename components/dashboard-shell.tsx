@@ -120,7 +120,7 @@ const toneClasses: Record<string, string> = {
   indigo: 'bg-indigo-500/10 text-indigo-400',
 }
 
-type WorkspaceNotification = { id: string; message: string; notification_type: string; read_at: string | null; created_at: string }
+type WorkspaceNotification = { id: string; message: string; notification_type: string; entity_type?: string | null; entity_id?: string | null; link_path?: string | null; read_at: string | null; created_at: string }
 type SearchItem = { label: string; slug: string; group: string }
 
 function DashboardContent({ initialSection = 'Dashboard', page, permissions, profileName = '' }: { initialSection?: string; page?: ReactNode; permissions: string[]; profileName?: string }) {
@@ -135,6 +135,7 @@ function DashboardContent({ initialSection = 'Dashboard', page, permissions, pro
   const [notifications, setNotifications] = useState<WorkspaceNotification[]>([])
   const [notificationsLoading, setNotificationsLoading] = useState(false)
   const [notificationsError, setNotificationsError] = useState('')
+  const [actionableNotificationIds, setActionableNotificationIds] = useState<string[]>([])
   const searchInput = useRef<HTMLInputElement>(null)
   const displayName = profileName.trim() || 'Usuário'
   const initials = displayName.split(/\s+/).slice(0, 2).map((part) => part[0]).join('').toUpperCase()
@@ -178,13 +179,22 @@ function DashboardContent({ initialSection = 'Dashboard', page, permissions, pro
     setNotificationsError('')
     try {
       const { data, error } = await createClient().from('notifications')
-        .select('id,message,notification_type,read_at,created_at')
+        .select('id,message,notification_type,entity_type,entity_id,link_path,read_at,created_at')
         .order('created_at', { ascending: false })
         .limit(30)
       if (error) {
         console.error('Workspace notifications load failed:', error.message)
         setNotificationsError('Não foi possível carregar as notificações.')
-      } else setNotifications(data ?? [])
+      } else {
+        setNotifications(data ?? [])
+        const user = (await createClient().auth.getUser()).data.user
+        if (user) {
+          const loadedNotifications = (data ?? []) as WorkspaceNotification[]
+        const taskIds = loadedNotifications.filter((item: WorkspaceNotification) => item.notification_type === 'task_share' || item.notification_type === 'task_transfer').map((item: WorkspaceNotification) => item.entity_id).filter(Boolean)
+          const pending = taskIds.length ? await createClient().from('task_transfer_requests').select('task_id').eq('target_id', user.id).eq('status', 'pending').in('task_id', taskIds) : { data: [] }
+          setActionableNotificationIds(((pending.data ?? []) as { task_id: string }[]).map((item) => loadedNotifications.find((notification: WorkspaceNotification) => notification.entity_id === item.task_id)?.id).filter(Boolean) as string[])
+        }
+      }
     } catch (error) {
       console.error('Workspace notifications request failed:', error)
       setNotificationsError('Não foi possível carregar as notificações.')
@@ -218,6 +228,29 @@ function DashboardContent({ initialSection = 'Dashboard', page, permissions, pro
       console.error('Workspace notification update request failed:', error)
       setNotificationsError('Não foi possível marcar a notificação como lida.')
     }
+  }
+
+  async function respondToTaskNotification(notification: WorkspaceNotification, status: 'accepted' | 'rejected') {
+    if (!notification.entity_id) return
+    const supabase = createClient()
+    const { data: userData } = await supabase.auth.getUser()
+    const userId = userData.user?.id
+    if (!userId) return
+    const { data: request } = await supabase.from('task_transfer_requests').select('id,requester_id,request_type').eq('task_id', notification.entity_id).eq('target_id', userId).eq('status', 'pending').order('created_at', { ascending: false }).maybeSingle()
+    if (!request) return
+    const { error } = await supabase.from('task_transfer_requests').update({ status, responded_at: new Date().toISOString() }).eq('id', request.id).eq('target_id', userId)
+    if (error) return
+    if (status === 'accepted') {
+      if (request.request_type === 'transfer') await supabase.from('project_tasks').update({ responsible_id: userId }).eq('id', notification.entity_id)
+      else {
+        const { data: task } = await supabase.from('project_tasks').select('participants').eq('id', notification.entity_id).maybeSingle()
+        const participants = Array.isArray(task?.participants) ? task.participants : []
+        await supabase.from('project_tasks').update({ participants: Array.from(new Set([...participants, userId])) }).eq('id', notification.entity_id)
+      }
+    }
+    await supabase.from('notifications').insert({ recipient_id: request.requester_id, notification_type: `task_${status}`, message: `Sua solicitação de ${request.request_type === 'share' ? 'compartilhamento' : 'transferência'} foi ${status === 'accepted' ? 'aceita' : 'recusada'}.`, entity_type: 'task', entity_id: notification.entity_id, link_path: notification.link_path })
+    await markNotificationRead(notification)
+    await loadNotifications()
   }
 
   const searchItems: SearchItem[] = navigationGroups.flatMap((group) => group.items.flatMap((item) => {
@@ -281,7 +314,7 @@ function DashboardContent({ initialSection = 'Dashboard', page, permissions, pro
       </aside>
       {mobileOpen && <button className="fixed inset-0 z-30 bg-black/60 lg:hidden" onClick={() => setMobileOpen(false)} aria-label="Fechar menu" />}
       <div className={`transition-[margin] duration-200 ${collapsed ? 'lg:ml-[78px]' : 'lg:ml-[258px]'}`}>
-        <header className="sticky top-0 z-20 flex h-[72px] items-center gap-4 border-b border-white/[0.07] bg-[#0b0d12]/90 px-4 backdrop-blur-xl sm:px-7">
+        <header className="sticky top-0 z-20 flex min-h-[72px] flex-wrap items-center gap-2 border-b border-white/[0.07] bg-[#0b0d12]/90 px-3 py-2 backdrop-blur-xl sm:gap-4 sm:px-7">
           <button className="rounded-md p-2 text-slate-400 hover:bg-white/5 lg:hidden" onClick={() => setMobileOpen(true)} aria-label="Abrir menu"><Menu className="size-5" /></button>
           <div className="hidden items-center gap-2 text-xs text-slate-500 sm:flex"><span>Workspace</span><ChevronRight className="size-3" /><span className="text-slate-300">{activeSection}</span></div>
           <div className="ml-auto flex items-center gap-2">
@@ -291,15 +324,15 @@ function DashboardContent({ initialSection = 'Dashboard', page, permissions, pro
                 <Bell className="size-[18px]" />
                 {notifications.some((notification) => !notification.read_at) && <span className="absolute right-1.5 top-1.5 size-2 rounded-full bg-blue-400" />}
               </button>
-              {notificationsOpen && <section className="absolute right-0 top-12 z-50 w-[min(24rem,calc(100vw-2rem))] overflow-hidden rounded-xl border border-white/[0.1] bg-[#11161e] shadow-2xl" aria-label="Notificações recentes">
+              {notificationsOpen && <section className="fixed left-2 right-2 top-[4.25rem] z-50 max-h-[calc(100vh-5rem)] overflow-hidden rounded-xl border border-white/[0.1] bg-[#11161e] shadow-2xl sm:absolute sm:left-auto sm:right-0 sm:top-12 sm:w-[min(24rem,calc(100vw-2rem))]" aria-label="Notificações recentes">
                 <div className="flex items-center justify-between border-b border-white/[0.07] px-4 py-3"><div><h2 className="text-sm font-semibold text-slate-100">Notificações</h2><p className="text-[11px] text-slate-500">{notifications.filter((notification) => !notification.read_at).length} não lida(s)</p></div><button onClick={() => void loadNotifications()} aria-label="Atualizar notificações" className="rounded px-2 py-1 text-xs text-blue-300 hover:bg-white/[0.05]">Atualizar</button></div>
                 {notificationsError && <p role="alert" className="px-4 py-3 text-xs text-rose-300">{notificationsError}</p>}
                 <div className="max-h-96 overflow-y-auto">
                   {notificationsLoading ? <p className="px-4 py-8 text-center text-xs text-slate-500">Carregando notificações...</p>
-                    : notifications.length ? notifications.map((notification) => <button key={notification.id} onClick={() => void markNotificationRead(notification)} className={`flex w-full gap-3 border-b border-white/[0.05] px-4 py-3 text-left last:border-0 hover:bg-white/[0.04] ${notification.read_at ? 'opacity-70' : ''}`}>
+                    : notifications.length ? notifications.map((notification) => <div key={notification.id} className={`flex gap-3 border-b border-white/[0.05] px-4 py-3 last:border-0 hover:bg-white/[0.04] ${notification.read_at ? 'opacity-70' : ''}`}>
                       <span className={`mt-1.5 size-2 shrink-0 rounded-full ${notification.read_at ? 'bg-slate-600' : 'bg-blue-400'}`} />
-                      <span className="min-w-0"><span className="block text-xs leading-5 text-slate-200">{notification.message}</span><span className="mt-1 block text-[10px] text-slate-500">{new Date(notification.created_at).toLocaleString('pt-BR')}</span></span>
-                    </button>)
+                      <div className="min-w-0 flex-1"><button type="button" onClick={() => { void markNotificationRead(notification); if (notification.link_path) router.push(notification.link_path) }} className="block w-full text-left"><span className="block text-xs leading-5 text-slate-200">{notification.message}</span><span className="mt-1 block text-[10px] text-slate-500">{new Date(notification.created_at).toLocaleString('pt-BR')}</span></button>{actionableNotificationIds.includes(notification.id) && !notification.notification_type.startsWith('task_admin_') ? <div className="mt-2 flex gap-2"><button type="button" onClick={() => void respondToTaskNotification(notification, 'accepted')} className="rounded bg-emerald-500/15 px-2 py-1 text-[11px] font-medium text-emerald-300 hover:bg-emerald-500/25">Aceitar</button><button type="button" onClick={() => void respondToTaskNotification(notification, 'rejected')} className="rounded bg-rose-500/15 px-2 py-1 text-[11px] font-medium text-rose-300 hover:bg-rose-500/25">Rejeitar</button></div> : null}</div>
+                    </div>)
                     : !notificationsError && <p className="px-4 py-8 text-center text-xs text-slate-500">Nenhuma notificação encontrada.</p>}
                 </div>
               </section>}
@@ -313,7 +346,7 @@ function DashboardContent({ initialSection = 'Dashboard', page, permissions, pro
             <button onClick={() => void signOut()} className="rounded-lg px-2 py-1.5 text-xs text-slate-500 hover:bg-white/5 hover:text-white" aria-label="Sair da conta">Sair</button>
           </div>
         </header>
-        <main className="mx-auto max-w-[1500px] px-4 py-7 sm:px-7 lg:px-9">{page ?? <>{activeSection === 'Dashboard' &&         <div id="dashboard-overview" className="scroll-mt-24"><div className="mb-8 flex flex-col justify-between gap-5 sm:flex-row sm:items-end"><div><p className="mb-2 text-xs font-medium uppercase tracking-[0.16em] text-blue-400">Visão geral</p><h1 className="text-2xl font-semibold tracking-tight text-white sm:text-[28px]">Olá, {displayName}</h1><p className="mt-1.5 text-sm text-slate-500">Acompanhe as áreas permitidas para você.</p></div>{permissions.includes('*') && <button className="flex w-fit items-center gap-2 rounded-lg bg-blue-500 px-3.5 py-2.5 text-xs font-semibold text-white shadow-lg shadow-blue-500/15 transition-colors hover:bg-blue-400"><Plus className="size-4" />Adicionar registro</button>}</div>
+        <main className="mx-auto w-full max-w-[1500px] overflow-x-hidden px-3 py-5 sm:px-7 sm:py-7 lg:px-9">{page ?? <>{activeSection === 'Dashboard' &&         <div id="dashboard-overview" className="scroll-mt-24"><div className="mb-8 flex flex-col justify-between gap-5 sm:flex-row sm:items-end"><div><p className="mb-2 text-xs font-medium uppercase tracking-[0.16em] text-blue-400">Visão geral</p><h1 className="text-2xl font-semibold tracking-tight text-white sm:text-[28px]">Olá, {displayName}</h1><p className="mt-1.5 text-sm text-slate-500">Acompanhe as áreas permitidas para você.</p></div>{permissions.includes('*') && <button className="flex w-fit items-center gap-2 rounded-lg bg-blue-500 px-3.5 py-2.5 text-xs font-semibold text-white shadow-lg shadow-blue-500/15 transition-colors hover:bg-blue-400"><Plus className="size-4" />Adicionar registro</button>}</div>
           <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">{metrics.filter((metric) => {
             const metricPermission: Record<string, string> = {
               'Leads ativos': 'leads:view', 'Clientes ativos': 'clients:view', 'Projetos em andamento': 'projects:view',
