@@ -304,7 +304,7 @@ function DashboardContent({ initialSection = 'Dashboard', page, permissions, pro
       </aside>
       {mobileOpen && <button className="fixed inset-0 z-30 bg-black/60 lg:hidden" onClick={() => setMobileOpen(false)} aria-label="Fechar menu" />}
       <div className={`transition-[margin] duration-200 ${collapsed ? 'lg:ml-[78px]' : 'lg:ml-[258px]'}`}>
-        <header className="sticky top-0 z-20 flex h-[72px] items-center gap-4 border-b border-white/[0.07] bg-[#0b0d12]/90 px-4 backdrop-blur-xl sm:px-7">
+        <header className="sticky top-0 z-20 flex min-h-[72px] flex-wrap items-center gap-2 border-b border-white/[0.07] bg-[#0b0d12]/90 px-3 py-2 backdrop-blur-xl sm:gap-4 sm:px-7">
           <button className="rounded-md p-2 text-slate-400 hover:bg-white/5 lg:hidden" onClick={() => setMobileOpen(true)} aria-label="Abrir menu"><Menu className="size-5" /></button>
           <div className="hidden items-center gap-2 text-xs text-slate-500 sm:flex"><span>Workspace</span><ChevronRight className="size-3" /><span className="text-slate-300">{activeSection}</span></div>
           <div className="ml-auto flex items-center gap-2">
@@ -314,7 +314,7 @@ function DashboardContent({ initialSection = 'Dashboard', page, permissions, pro
                 <Bell className="size-[18px]" />
                 {notifications.some((notification) => !notification.read_at) && <span className="absolute right-1.5 top-1.5 size-2 rounded-full bg-blue-400" />}
               </button>
-              {notificationsOpen && <section className="absolute right-0 top-12 z-50 w-[min(24rem,calc(100vw-2rem))] overflow-hidden rounded-xl border border-white/[0.1] bg-[#11161e] shadow-2xl" aria-label="Notificações recentes">
+              {notificationsOpen && <section className="fixed left-2 right-2 top-[4.25rem] z-50 max-h-[calc(100vh-5rem)] overflow-hidden rounded-xl border border-white/[0.1] bg-[#11161e] shadow-2xl sm:absolute sm:left-auto sm:right-0 sm:top-12 sm:w-[min(24rem,calc(100vw-2rem))]" aria-label="Notificações recentes">
                 <div className="flex items-center justify-between border-b border-white/[0.07] px-4 py-3"><div><h2 className="text-sm font-semibold text-slate-100">Notificações</h2><p className="text-[11px] text-slate-500">{notifications.filter((notification) => !notification.read_at).length} não lida(s)</p></div><button onClick={() => void loadNotifications()} aria-label="Atualizar notificações" className="rounded px-2 py-1 text-xs text-blue-300 hover:bg-white/[0.05]">Atualizar</button></div>
                 {notificationsError && <p role="alert" className="px-4 py-3 text-xs text-rose-300">{notificationsError}</p>}
                 <div className="max-h-96 overflow-y-auto">
@@ -336,7 +336,7 @@ function DashboardContent({ initialSection = 'Dashboard', page, permissions, pro
             <button onClick={() => void signOut()} className="rounded-lg px-2 py-1.5 text-xs text-slate-500 hover:bg-white/5 hover:text-white" aria-label="Sair da conta">Sair</button>
           </div>
         </header>
-        <main className="mx-auto max-w-[1500px] px-4 py-7 sm:px-7 lg:px-9">{page ?? <>{activeSection === 'Dashboard' &&         <div id="dashboard-overview" className="scroll-mt-24"><div className="mb-8 flex flex-col justify-between gap-5 sm:flex-row sm:items-end"><div><p className="mb-2 text-xs font-medium uppercase tracking-[0.16em] text-blue-400">Visão geral</p><h1 className="text-2xl font-semibold tracking-tight text-white sm:text-[28px]">Olá, {displayName}</h1><p className="mt-1.5 text-sm text-slate-500">Acompanhe as áreas permitidas para você.</p></div>{permissions.includes('*') && <button className="flex w-fit items-center gap-2 rounded-lg bg-blue-500 px-3.5 py-2.5 text-xs font-semibold text-white shadow-lg shadow-blue-500/15 transition-colors hover:bg-blue-400"><Plus className="size-4" />Adicionar registro</button>}</div>
+        <main className="mx-auto w-full max-w-[1500px] overflow-x-hidden px-3 py-5 sm:px-7 sm:py-7 lg:px-9">{page ?? <>{activeSection === 'Dashboard' &&         <div id="dashboard-overview" className="scroll-mt-24"><div className="mb-8 flex flex-col justify-between gap-5 sm:flex-row sm:items-end"><div><p className="mb-2 text-xs font-medium uppercase tracking-[0.16em] text-blue-400">Visão geral</p><h1 className="text-2xl font-semibold tracking-tight text-white sm:text-[28px]">Olá, {displayName}</h1><p className="mt-1.5 text-sm text-slate-500">Acompanhe as áreas permitidas para você.</p></div>{permissions.includes('*') && <button className="flex w-fit items-center gap-2 rounded-lg bg-blue-500 px-3.5 py-2.5 text-xs font-semibold text-white shadow-lg shadow-blue-500/15 transition-colors hover:bg-blue-400"><Plus className="size-4" />Adicionar registro</button>}</div>
           <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">{metrics.filter((metric) => {
             const metricPermission: Record<string, string> = {
               'Leads ativos': 'leads:view', 'Clientes ativos': 'clients:view', 'Projetos em andamento': 'projects:view',
