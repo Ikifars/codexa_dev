@@ -8,9 +8,9 @@ export default async function WorkspacePage() {
   try {
     const access = await getWorkspaceAccessSnapshot()
     if (!hasWorkspaceAccess(access.permissions, 'dashboard')) {
-      return <DashboardShell initialSection="Dashboard" permissions={access.permissions} page={<AccessDenied />} />
+      return <DashboardShell initialSection="Dashboard" permissions={access.permissions} profileName={access.fullName} page={<AccessDenied />} />
     }
-    return <DashboardShell permissions={access.permissions} />
+    return <DashboardShell permissions={access.permissions} profileName={access.fullName} />
   } catch (error) {
     if (error instanceof AdminApiError && error.status === 403) {
       return <DashboardShell initialSection="Dashboard" page={<AccessDenied />} />

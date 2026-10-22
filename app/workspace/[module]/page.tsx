@@ -13,9 +13,9 @@ export default async function ModulePage({ params }: { params: Promise<{ module:
   try {
     const access = await getWorkspaceAccessSnapshot()
     if (!hasWorkspaceAccess(access.permissions, module)) {
-      return <DashboardShell initialSection={workspaceLabel(module)} permissions={access.permissions} page={<AccessDenied />} />
+      return <DashboardShell initialSection={workspaceLabel(module)} permissions={access.permissions} profileName={access.fullName} page={<AccessDenied />} />
     }
-    return <DashboardShell initialSection={workspaceLabel(module)} permissions={access.permissions} page={<WorkspacePageRouter module={module} />} />
+    return <DashboardShell initialSection={workspaceLabel(module)} permissions={access.permissions} profileName={access.fullName} page={<WorkspacePageRouter module={module} permissions={access.permissions} profileName={access.fullName} />} />
   } catch (error) {
     if (error instanceof AdminApiError && error.status === 403) {
       return <DashboardShell initialSection={workspaceLabel(module)} page={<AccessDenied />} />

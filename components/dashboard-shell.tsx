@@ -1,8 +1,9 @@
 'use client'
 
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import type { AuthChangeEvent, Session } from '@supabase/supabase-js'
+import Image from 'next/image'
 import { CrmWorkspace } from '@/components/crm-workspace'
 import { CommercialWorkspace } from '@/components/commercial-workspace'
 import { OperationsWorkspace } from '@/components/operations-workspace'
@@ -13,6 +14,7 @@ import { AccountWorkspace } from '@/components/account-workspace'
 import { AuthScreen } from '@/components/auth-screen'
 import { createClient } from '@/lib/supabase/client'
 import { hasWorkspaceAccess } from '@/lib/workspace-access'
+import { applyWorkspaceTheme, getWorkspaceThemePreference } from '@/lib/workspace-theme'
 import {
   Activity,
   Bell,
@@ -118,11 +120,113 @@ const toneClasses: Record<string, string> = {
   indigo: 'bg-indigo-500/10 text-indigo-400',
 }
 
-function DashboardContent({ initialSection = 'Dashboard', page, permissions }: { initialSection?: string; page?: ReactNode; permissions: string[] }) {
+type WorkspaceNotification = { id: string; message: string; notification_type: string; read_at: string | null; created_at: string }
+type SearchItem = { label: string; slug: string; group: string }
+
+function DashboardContent({ initialSection = 'Dashboard', page, permissions, profileName = '' }: { initialSection?: string; page?: ReactNode; permissions: string[]; profileName?: string }) {
   const router = useRouter()
+  const pathname = usePathname()
   const [collapsed, setCollapsed] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
   const [activeSection, setActiveSection] = useState(initialSection)
+  const [searchOpen, setSearchOpen] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [notificationsOpen, setNotificationsOpen] = useState(false)
+  const [notifications, setNotifications] = useState<WorkspaceNotification[]>([])
+  const [notificationsLoading, setNotificationsLoading] = useState(false)
+  const [notificationsError, setNotificationsError] = useState('')
+  const searchInput = useRef<HTMLInputElement>(null)
+  const displayName = profileName.trim() || 'Usuário'
+  const initials = displayName.split(/\s+/).slice(0, 2).map((part) => part[0]).join('').toUpperCase()
+
+  useEffect(() => {
+    setActiveSection(initialSection)
+  }, [initialSection, pathname])
+
+  useEffect(() => {
+    const applySavedTheme = () => applyWorkspaceTheme(getWorkspaceThemePreference())
+    applySavedTheme()
+    const colorScheme = window.matchMedia('(prefers-color-scheme: light)')
+    const onSystemThemeChange = () => {
+      if (getWorkspaceThemePreference() === 'system') applySavedTheme()
+    }
+    colorScheme.addEventListener('change', onSystemThemeChange)
+    return () => colorScheme.removeEventListener('change', onSystemThemeChange)
+  }, [])
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
+        event.preventDefault()
+        setSearchOpen(true)
+      } else if (event.key === 'Escape') {
+        setSearchOpen(false)
+        setNotificationsOpen(false)
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [])
+
+  useEffect(() => {
+    if (searchOpen) searchInput.current?.focus()
+    else setSearchQuery('')
+  }, [searchOpen])
+
+  async function loadNotifications() {
+    setNotificationsLoading(true)
+    setNotificationsError('')
+    try {
+      const { data, error } = await createClient().from('notifications')
+        .select('id,message,notification_type,read_at,created_at')
+        .order('created_at', { ascending: false })
+        .limit(30)
+      if (error) {
+        console.error('Workspace notifications load failed:', error.message)
+        setNotificationsError('Não foi possível carregar as notificações.')
+      } else setNotifications(data ?? [])
+    } catch (error) {
+      console.error('Workspace notifications request failed:', error)
+      setNotificationsError('Não foi possível carregar as notificações.')
+    } finally {
+      setNotificationsLoading(false)
+    }
+  }
+
+  async function toggleNotifications() {
+    const opening = !notificationsOpen
+    setNotificationsOpen(opening)
+    if (opening) await loadNotifications()
+  }
+
+  async function markNotificationRead(notification: WorkspaceNotification) {
+    if (notification.read_at) return
+    const readAt = new Date().toISOString()
+    try {
+      const { data, error } = await createClient().from('notifications')
+        .update({ read_at: readAt })
+        .eq('id', notification.id)
+        .select('id')
+        .maybeSingle()
+      if (error || !data) {
+        console.error('Workspace notification update failed:', error?.message ?? 'No notification row was updated')
+        setNotificationsError('Não foi possível marcar a notificação como lida.')
+        return
+      }
+      setNotifications((current) => current.map((item) => item.id === notification.id ? { ...item, read_at: readAt } : item))
+    } catch (error) {
+      console.error('Workspace notification update request failed:', error)
+      setNotificationsError('Não foi possível marcar a notificação como lida.')
+    }
+  }
+
+  const searchItems: SearchItem[] = navigationGroups.flatMap((group) => group.items.flatMap((item) => {
+    const slug = sectionSlugs[item.label]
+    return slug && hasWorkspaceAccess(permissions, slug) ? [{ label: item.label, slug, group: group.label }] : []
+  }))
+  const matchingSearchItems = searchItems.filter((item) =>
+    `${item.label} ${item.group}`.toLocaleLowerCase('pt-BR').includes(searchQuery.trim().toLocaleLowerCase('pt-BR')),
+  )
 
   async function signOut() {
     await createClient().auth.signOut()
@@ -137,13 +241,18 @@ function DashboardContent({ initialSection = 'Dashboard', page, permissions }: {
     router.push(slug === 'dashboard' ? '/workspace' : `/workspace/${slug}`)
   }
 
+  function openSearchItem(item: SearchItem) {
+    setSearchOpen(false)
+    setActiveSection(item.label)
+    router.push(item.slug === 'dashboard' ? '/workspace' : `/workspace/${item.slug}`)
+  }
+
   return (
-    <div className="min-h-screen bg-[#0b0d12] text-slate-100">
+    <div className="workspace-shell min-h-screen bg-[#0b0d12] text-slate-100">
       <aside className={`fixed inset-y-0 left-0 z-40 flex w-[258px] flex-col border-r border-white/[0.07] bg-[#0f1219] transition-transform duration-200 lg:translate-x-0 ${collapsed ? 'lg:w-[78px]' : ''} ${mobileOpen ? 'translate-x-0' : '-translate-x-full'}`}>
-        <div className="flex h-[72px] items-center border-b border-white/[0.07] px-5">
-          <div className="flex min-w-0 items-center gap-3">
-            <div className="grid size-9 shrink-0 place-items-center rounded-xl bg-blue-500 text-white shadow-lg shadow-blue-500/20"><LayoutDashboard className="size-[18px]" /></div>
-            {!collapsed && <div className="min-w-0"><p className="truncate text-sm font-semibold tracking-tight">Code<span className="text-blue-400">xa</span></p><p className="text-[10px] uppercase tracking-[0.18em] text-slate-500">Gestão inteligente</p></div>}
+        <div className="flex h-24 items-center border-b border-white/[0.07] px-3">
+          <div className="flex min-w-0 flex-1 items-center justify-center">
+            <Image src="/codexa-logo.png" alt="Codexa" width={150} height={150} priority className={`shrink-0 object-contain ${collapsed ? 'size-16' : 'size-24'}`} />
           </div>
           <button onClick={() => setCollapsed(!collapsed)} className="ml-auto hidden rounded-md p-1.5 text-slate-500 hover:bg-white/5 hover:text-slate-200 lg:block" aria-label={collapsed ? 'Expandir menu' : 'Recolher menu'}>{collapsed ? <PanelLeftOpen className="size-4" /> : <PanelLeftClose className="size-4" />}</button>
           <button onClick={() => setMobileOpen(false)} className="ml-auto rounded-md p-1.5 text-slate-500 lg:hidden" aria-label="Fechar menu"><X className="size-4" /></button>
@@ -168,12 +277,43 @@ function DashboardContent({ initialSection = 'Dashboard', page, permissions }: {
             </div>
           )})}
         </nav>
-        {!collapsed && <div className="border-t border-white/[0.07] p-3"><div className="flex items-center gap-3 rounded-lg p-2"><div className="grid size-8 shrink-0 place-items-center rounded-full bg-slate-700 text-xs font-semibold text-slate-200">AD</div><div className="min-w-0 flex-1"><p className="truncate text-xs font-medium text-slate-200">Administrador</p><p className="truncate text-[11px] text-slate-500">Configuração pendente</p></div><ChevronDown className="size-3.5 text-slate-600" /></div></div>}
+        {!collapsed && <button onClick={() => openSection('Meu perfil')} className="border-t border-white/[0.07] p-3 text-left"><span className="flex items-center gap-3 rounded-lg p-2"><span className="grid size-8 shrink-0 place-items-center rounded-full bg-slate-700 text-xs font-semibold text-slate-200">{initials}</span><span className="min-w-0 flex-1"><span className="block truncate text-xs font-medium text-slate-200">{displayName}</span><span className="block truncate text-[11px] text-slate-500">Meu perfil</span></span></span></button>}
       </aside>
       {mobileOpen && <button className="fixed inset-0 z-30 bg-black/60 lg:hidden" onClick={() => setMobileOpen(false)} aria-label="Fechar menu" />}
       <div className={`transition-[margin] duration-200 ${collapsed ? 'lg:ml-[78px]' : 'lg:ml-[258px]'}`}>
-        <header className="sticky top-0 z-20 flex h-[72px] items-center gap-4 border-b border-white/[0.07] bg-[#0b0d12]/90 px-4 backdrop-blur-xl sm:px-7"><button className="rounded-md p-2 text-slate-400 hover:bg-white/5 lg:hidden" onClick={() => setMobileOpen(true)} aria-label="Abrir menu"><Menu className="size-5" /></button><div className="hidden items-center gap-2 text-xs text-slate-500 sm:flex"><span>Workspace</span><ChevronRight className="size-3" /><span className="text-slate-300">{activeSection}</span></div><div className="ml-auto flex items-center gap-2"><button className="hidden items-center gap-2 rounded-lg border border-white/[0.08] bg-white/[0.025] px-3 py-2 text-xs text-slate-500 transition-colors hover:border-white/15 hover:text-slate-300 md:flex"><Search className="size-3.5" />Buscar<span className="rounded border border-white/10 px-1.5 py-0.5 text-[10px] text-slate-600">⌘ K</span></button><button className="relative rounded-lg p-2 text-slate-400 hover:bg-white/5 hover:text-white" aria-label="Notificações"><Bell className="size-[18px]" /><span className="absolute right-1.5 top-1.5 size-1.5 rounded-full bg-blue-400" /></button><div className="mx-1 h-5 w-px bg-white/10" /><button onClick={() => void signOut()} className="flex items-center gap-2 rounded-lg p-1.5 pr-2 hover:bg-white/5" aria-label="Sair da conta"><div className="grid size-7 place-items-center rounded-full bg-blue-500/20 text-[10px] font-bold text-blue-300">AD</div><ChevronDown className="size-3.5 text-slate-500" /></button></div></header>
-        <main className="mx-auto max-w-[1500px] px-4 py-7 sm:px-7 lg:px-9">{page ?? <>{activeSection === 'Dashboard' && <div id="dashboard-overview" className="scroll-mt-24"><div className="mb-8 flex flex-col justify-between gap-5 sm:flex-row sm:items-end"><div><p className="mb-2 text-xs font-medium uppercase tracking-[0.16em] text-blue-400">Visão geral</p><h1 className="text-2xl font-semibold tracking-tight text-white sm:text-[28px]">{permissions.includes('*') ? 'Bom dia, administrador' : 'Seu ambiente de trabalho'}</h1><p className="mt-1.5 text-sm text-slate-500">Acompanhe as áreas permitidas para o seu cargo.</p></div>{permissions.includes('*') && <button className="flex w-fit items-center gap-2 rounded-lg bg-blue-500 px-3.5 py-2.5 text-xs font-semibold text-white shadow-lg shadow-blue-500/15 transition-colors hover:bg-blue-400"><Plus className="size-4" />Adicionar registro</button>}</div>
+        <header className="sticky top-0 z-20 flex h-[72px] items-center gap-4 border-b border-white/[0.07] bg-[#0b0d12]/90 px-4 backdrop-blur-xl sm:px-7">
+          <button className="rounded-md p-2 text-slate-400 hover:bg-white/5 lg:hidden" onClick={() => setMobileOpen(true)} aria-label="Abrir menu"><Menu className="size-5" /></button>
+          <div className="hidden items-center gap-2 text-xs text-slate-500 sm:flex"><span>Workspace</span><ChevronRight className="size-3" /><span className="text-slate-300">{activeSection}</span></div>
+          <div className="ml-auto flex items-center gap-2">
+            <button onClick={() => setSearchOpen(true)} aria-label="Buscar (Ctrl+K)" className="hidden items-center gap-2 rounded-lg border border-white/[0.08] bg-white/[0.025] px-3 py-2 text-xs text-slate-500 transition-colors hover:border-white/15 hover:text-slate-300 md:flex"><Search className="size-3.5" />Buscar<span className="rounded border border-white/10 px-1.5 py-0.5 text-[10px] text-slate-600">Ctrl K</span></button>
+            <div className="relative">
+              <button onClick={() => void toggleNotifications()} className="relative rounded-lg p-2 text-slate-400 hover:bg-white/5 hover:text-white" aria-label="Notificações" aria-expanded={notificationsOpen}>
+                <Bell className="size-[18px]" />
+                {notifications.some((notification) => !notification.read_at) && <span className="absolute right-1.5 top-1.5 size-2 rounded-full bg-blue-400" />}
+              </button>
+              {notificationsOpen && <section className="absolute right-0 top-12 z-50 w-[min(24rem,calc(100vw-2rem))] overflow-hidden rounded-xl border border-white/[0.1] bg-[#11161e] shadow-2xl" aria-label="Notificações recentes">
+                <div className="flex items-center justify-between border-b border-white/[0.07] px-4 py-3"><div><h2 className="text-sm font-semibold text-slate-100">Notificações</h2><p className="text-[11px] text-slate-500">{notifications.filter((notification) => !notification.read_at).length} não lida(s)</p></div><button onClick={() => void loadNotifications()} aria-label="Atualizar notificações" className="rounded px-2 py-1 text-xs text-blue-300 hover:bg-white/[0.05]">Atualizar</button></div>
+                {notificationsError && <p role="alert" className="px-4 py-3 text-xs text-rose-300">{notificationsError}</p>}
+                <div className="max-h-96 overflow-y-auto">
+                  {notificationsLoading ? <p className="px-4 py-8 text-center text-xs text-slate-500">Carregando notificações...</p>
+                    : notifications.length ? notifications.map((notification) => <button key={notification.id} onClick={() => void markNotificationRead(notification)} className={`flex w-full gap-3 border-b border-white/[0.05] px-4 py-3 text-left last:border-0 hover:bg-white/[0.04] ${notification.read_at ? 'opacity-70' : ''}`}>
+                      <span className={`mt-1.5 size-2 shrink-0 rounded-full ${notification.read_at ? 'bg-slate-600' : 'bg-blue-400'}`} />
+                      <span className="min-w-0"><span className="block text-xs leading-5 text-slate-200">{notification.message}</span><span className="mt-1 block text-[10px] text-slate-500">{new Date(notification.created_at).toLocaleString('pt-BR')}</span></span>
+                    </button>)
+                    : !notificationsError && <p className="px-4 py-8 text-center text-xs text-slate-500">Nenhuma notificação encontrada.</p>}
+                </div>
+              </section>}
+            </div>
+            <div className="mx-1 h-5 w-px bg-white/10" />
+            <button onClick={() => openSection('Meu perfil')} className="flex items-center gap-2 rounded-lg p-1.5 pr-2 hover:bg-white/5" aria-label={`Perfil de ${displayName}`}>
+              <span className="grid size-7 place-items-center rounded-full bg-blue-500/20 text-[10px] font-bold text-blue-300">{initials}</span>
+              <span className="hidden max-w-32 truncate text-xs text-slate-300 sm:block">{displayName}</span>
+              <ChevronDown className="size-3.5 text-slate-500" />
+            </button>
+            <button onClick={() => void signOut()} className="rounded-lg px-2 py-1.5 text-xs text-slate-500 hover:bg-white/5 hover:text-white" aria-label="Sair da conta">Sair</button>
+          </div>
+        </header>
+        <main className="mx-auto max-w-[1500px] px-4 py-7 sm:px-7 lg:px-9">{page ?? <>{activeSection === 'Dashboard' &&         <div id="dashboard-overview" className="scroll-mt-24"><div className="mb-8 flex flex-col justify-between gap-5 sm:flex-row sm:items-end"><div><p className="mb-2 text-xs font-medium uppercase tracking-[0.16em] text-blue-400">Visão geral</p><h1 className="text-2xl font-semibold tracking-tight text-white sm:text-[28px]">Olá, {displayName}</h1><p className="mt-1.5 text-sm text-slate-500">Acompanhe as áreas permitidas para você.</p></div>{permissions.includes('*') && <button className="flex w-fit items-center gap-2 rounded-lg bg-blue-500 px-3.5 py-2.5 text-xs font-semibold text-white shadow-lg shadow-blue-500/15 transition-colors hover:bg-blue-400"><Plus className="size-4" />Adicionar registro</button>}</div>
           <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">{metrics.filter((metric) => {
             const metricPermission: Record<string, string> = {
               'Leads ativos': 'leads:view', 'Clientes ativos': 'clients:view', 'Projetos em andamento': 'projects:view',
@@ -188,21 +328,31 @@ function DashboardContent({ initialSection = 'Dashboard', page, permissions }: {
           </div>}
           {['Leads', 'Mensagens', 'Clientes'].includes(activeSection) && <div id="crm-workspace" className="scroll-mt-24"><CrmWorkspace initialModule={activeSection === 'Clientes' ? 'clients' : activeSection === 'Mensagens' ? 'messages' : 'leads'} /></div>}
           {['Propostas', 'Contratos'].includes(activeSection) && <div id="commercial-workspace" className="scroll-mt-24"><CommercialWorkspace initialTab={activeSection === 'Contratos' ? 'contracts' : 'proposals'} /></div>}
-          {['Projetos', 'Solicitações de alteração', 'Suporte'].includes(activeSection) && <div id="operations-workspace" className="scroll-mt-24"><OperationsWorkspace initialModule={activeSection === 'Suporte' ? 'support_tickets' : activeSection === 'Solicitações de alteração' ? 'change_requests' : 'projects'} /></div>}
+          {['Projetos', 'Solicitações de alteração', 'Suporte'].includes(activeSection) && <div id="operations-workspace" className="scroll-mt-24"><OperationsWorkspace permissions={permissions} initialModule={activeSection === 'Suporte' ? 'support_tickets' : activeSection === 'Solicitações de alteração' ? 'change_requests' : 'projects'} /></div>}
           {['Sistemas dos clientes', 'Módulos'].includes(activeSection) && <div id="catalog-workspace" className="scroll-mt-24"><CatalogWorkspace initialTab={activeSection === 'Módulos' ? 'modules' : 'systems'} /></div>}
           {['Contas a receber', 'Contas a pagar', 'Fluxo de caixa', 'Transações', 'Categorias financeiras'].includes(activeSection) && <div id="finance-workspace" className="scroll-mt-24"><FinanceWorkspace initialTab={activeSection === 'Contas a receber' ? 'receivable' : activeSection === 'Contas a pagar' ? 'payable' : 'overview'} /></div>}
           {['Equipe', 'Relatórios', 'Configurações'].includes(activeSection) && <div id="admin-workspace" className="scroll-mt-24"><AdminWorkspace section={activeSection} /></div>}
-          {['Meu perfil', 'Aparência'].includes(activeSection) && <AccountWorkspace section={activeSection} />}
+          {['Meu perfil', 'Aparência'].includes(activeSection) && <AccountWorkspace section={activeSection} initialName={profileName} />}
           {!['Dashboard', 'Leads', 'Mensagens', 'Clientes', 'Propostas', 'Contratos', 'Projetos', 'Solicitações de alteração', 'Suporte', 'Sistemas', 'Módulos', 'Planos', 'Licenças', 'Financeiro', 'Equipe', 'Relatórios', 'Configurações'].includes(activeSection) && <section className="rounded-xl border border-white/[0.07] bg-[#11161e] p-8"><p className="text-xs font-medium uppercase tracking-[0.16em] text-blue-400">Módulo</p><h1 className="mt-2 text-2xl font-semibold text-white">{activeSection}</h1><p className="mt-2 text-sm text-slate-500">Esta página está preparada para receber os registros deste módulo.</p></section>}
           </>}
           <div className="mt-7 flex items-center gap-2 text-[11px] text-slate-600"><div className="size-1.5 rounded-full bg-amber-400" />Supabase conectado · CRM pronto para seus primeiros registros.</div>
         </main>
       </div>
+      {searchOpen && <div className="fixed inset-0 z-[60] flex items-start justify-center bg-black/65 px-4 pt-[12vh]" onMouseDown={(event) => { if (event.target === event.currentTarget) setSearchOpen(false) }}>
+        <section role="dialog" aria-modal="true" aria-label="Buscar módulos" className="w-full max-w-xl overflow-hidden rounded-xl border border-white/[0.1] bg-[#11161e] shadow-2xl">
+          <div className="flex items-center gap-3 border-b border-white/[0.08] px-4"><Search className="size-4 text-slate-500" /><input ref={searchInput} value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="Buscar módulo..." className="h-14 flex-1 bg-transparent text-sm text-slate-100 outline-none placeholder:text-slate-500" /><kbd className="rounded border border-white/10 px-2 py-1 text-[10px] text-slate-500">ESC</kbd></div>
+          <div className="max-h-[55vh] overflow-y-auto p-2">
+            {matchingSearchItems.length ? matchingSearchItems.map((item) => <button key={item.slug} onClick={() => openSearchItem(item)} className="flex w-full items-center justify-between rounded-lg px-3 py-3 text-left text-sm text-slate-200 hover:bg-blue-500/10 hover:text-blue-200"><span>{item.label}</span><span className="text-[11px] text-slate-500">{item.group}</span></button>)
+              : <p className="px-3 py-8 text-center text-sm text-slate-500">Nenhum módulo encontrado.</p>}
+          </div>
+          <div className="border-t border-white/[0.07] px-4 py-2 text-[10px] text-slate-600">Navegue somente pelos módulos que seu cargo pode acessar.</div>
+        </section>
+      </div>}
     </div>
   )
 }
 
-export function DashboardShell({ initialSection = 'Dashboard', page, permissions = [] }: { initialSection?: string; page?: ReactNode; permissions?: string[] }) {
+export function DashboardShell({ initialSection = 'Dashboard', page, permissions = [], profileName = '' }: { initialSection?: string; page?: ReactNode; permissions?: string[]; profileName?: string }) {
   const [authenticated, setAuthenticated] = useState(false)
   const [checking, setChecking] = useState(true)
 
@@ -218,5 +368,5 @@ export function DashboardShell({ initialSection = 'Dashboard', page, permissions
 
   if (checking) return <main className="grid min-h-screen place-items-center bg-[#080b10] text-sm text-slate-500">Carregando sessão...</main>
   if (!authenticated) return <AuthScreen onAuthenticated={() => setAuthenticated(true)} />
-  return <DashboardContent initialSection={initialSection} page={page} permissions={permissions} />
+  return <DashboardContent initialSection={initialSection} page={page} permissions={permissions} profileName={profileName} />
 }

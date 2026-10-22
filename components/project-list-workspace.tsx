@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { BriefcaseBusiness, CalendarDays, CheckCircle2, CircleAlert, ClipboardList, FolderKanban, Loader2, Plus, Search, Users, X } from 'lucide-react'
+import { hasWorkspaceAccess } from '@/lib/workspace-access'
 
 type Project = {
   id: string
@@ -58,7 +59,7 @@ function formatDate(value: string | null) {
   return new Intl.DateTimeFormat('pt-BR', { dateStyle: 'medium' }).format(new Date(`${value.slice(0, 10)}T12:00:00`))
 }
 
-export function ProjectListWorkspace({ onSwitchModule }: { onSwitchModule?: (module: ModuleKey) => void }) {
+export function ProjectListWorkspace({ onSwitchModule, permissions }: { onSwitchModule?: (module: ModuleKey) => void; permissions: string[] }) {
   const router = useRouter()
   const [projects, setProjects] = useState<Project[]>([])
   const [tasks, setTasks] = useState<ProjectTask[]>([])
@@ -175,6 +176,8 @@ export function ProjectListWorkspace({ onSwitchModule }: { onSwitchModule?: (mod
   const statusOptions = [...new Set(projects.map((project) => project.status).filter(Boolean))]
   const priorityOptions = [...new Set(projects.map((project) => project.priority).filter(Boolean))]
   const activeMembers = members.filter(isActiveMember)
+  const canCreateProjects = permissions.includes('*') || permissions.includes('projects:create')
+  const availableModuleTabs = moduleTabs.filter(({ key }) => hasWorkspaceAccess(permissions, key === 'support_tickets' ? 'suporte' : key === 'change_requests' ? 'solicitacoes' : 'projetos'))
 
   return (
     <section className="mt-6 space-y-5">
@@ -186,14 +189,14 @@ export function ProjectListWorkspace({ onSwitchModule }: { onSwitchModule?: (mod
             <p className="mt-1 text-sm text-slate-500">Acompanhe responsáveis, prazos e progresso das entregas.</p>
           </div>
           <div className="flex flex-wrap gap-2">
-            {moduleTabs.map(({ key, label, icon: Icon, href }) => (
+            {availableModuleTabs.map(({ key, label, icon: Icon, href }) => (
               <button key={key} onClick={() => key === 'projects' ? undefined : onSwitchModule ? onSwitchModule(key) : router.push(href)} className={`flex min-h-10 items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium ${key === 'projects' ? 'bg-blue-500 text-white' : 'bg-white/[0.04] text-slate-400 hover:text-white'}`} aria-current={key === 'projects' ? 'page' : undefined}>
                 <Icon className="size-4" />{label}
               </button>
             ))}
-            <button onClick={() => setModal(true)} className="flex min-h-10 items-center gap-2 rounded-lg bg-blue-500 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-400">
+            {canCreateProjects && <button onClick={() => setModal(true)} className="flex min-h-10 items-center gap-2 rounded-lg bg-blue-500 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-400">
               <Plus className="size-4" />Novo projeto
-            </button>
+            </button>}
           </div>
         </div>
         <div className="grid gap-3 border-b border-white/[0.07] p-4 sm:grid-cols-2 xl:grid-cols-6">
@@ -232,7 +235,7 @@ export function ProjectListWorkspace({ onSwitchModule }: { onSwitchModule?: (mod
           <div className="mb-4 grid size-12 place-items-center rounded-xl bg-blue-400/10 text-blue-300"><FolderKanban className="size-6" /></div>
           <h2 className="text-base font-semibold text-slate-200">{projects.length ? 'Nenhum projeto corresponde aos filtros' : 'Nenhum projeto cadastrado'}</h2>
           <p className="mt-1 max-w-md text-sm text-slate-500">{projects.length ? 'Altere a busca ou remova alguns filtros.' : 'Crie seu primeiro projeto para acompanhar tarefas, arquivos e atividade.'}</p>
-          {!projects.length && <button onClick={() => setModal(true)} className="mt-5 flex min-h-10 items-center gap-2 rounded-lg bg-blue-500 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-400"><Plus className="size-4" />Criar projeto</button>}
+          {!projects.length && canCreateProjects && <button onClick={() => setModal(true)} className="mt-5 flex min-h-10 items-center gap-2 rounded-lg bg-blue-500 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-400"><Plus className="size-4" />Criar projeto</button>}
         </div>
       ) : (
         <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-3">

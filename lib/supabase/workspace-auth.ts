@@ -10,6 +10,7 @@ export type WorkspaceActor = {
   memberId: string
   roleId: string
   roleName: string
+  fullName: string
   supabase: ReturnType<typeof createServiceClient>
 }
 
@@ -36,7 +37,7 @@ export async function getWorkspaceActor(): Promise<WorkspaceActor> {
   const supabase = createServiceClient()
   const { data: members, error: memberError } = await supabase
     .from('team_members')
-    .select('id,role_name,status')
+    .select('id,role_name,status,full_name')
     .eq('user_id', user.id)
     .limit(2)
   if (memberError) {
@@ -60,7 +61,14 @@ export async function getWorkspaceActor(): Promise<WorkspaceActor> {
   )
   if (!role || !role.is_active) throw new AdminApiError('Seu cargo está inativo ou não foi configurado.', 403)
 
-  return { actorId: user.id, memberId: member.id, roleId: role.id, roleName: role.name, supabase }
+  return {
+    actorId: user.id,
+    memberId: member.id,
+    roleId: role.id,
+    roleName: role.name,
+    fullName: member.full_name,
+    supabase,
+  }
 }
 
 export async function getWorkspacePermissions(actor: WorkspaceActor): Promise<Set<string>> {
@@ -106,6 +114,7 @@ export async function getWorkspaceAccessSnapshot() {
   return {
     actorId: actor.actorId,
     roleName: actor.roleName,
+    fullName: actor.fullName,
     permissions: [...permissions],
   }
 }

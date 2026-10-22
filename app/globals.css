@@ -217,6 +217,26 @@
     border-color: #354157;
   }
 
+  .auth-card {
+    border-color: #2e3a50;
+    background: linear-gradient(145deg, #171e2b 0%, #111722 70%, #10151e 100%);
+    box-shadow: 0 24px 80px rgb(0 0 0 / 42%), 0 0 0 1px rgb(100 133 255 / 5%);
+  }
+
+  .auth-card .auth-email-field,
+  .auth-card .auth-input {
+    border-color: #3a465b;
+    background-color: #0d121b;
+    transition: border-color 150ms ease, background-color 150ms ease, box-shadow 150ms ease;
+  }
+
+  .auth-card .auth-email-field:focus-within,
+  .auth-card .auth-input:focus {
+    border-color: #829aff;
+    background-color: #111927;
+    box-shadow: 0 0 0 3px rgb(100 133 255 / 18%);
+  }
+
   input:not([type="checkbox"]):not([type="radio"]),
   select,
   textarea {
@@ -257,8 +277,18 @@
     border-top: 1px solid #252d3b;
   }
 
-  :is(select, option) {
+  select {
     color-scheme: dark;
+  }
+
+  option {
+    color: #e7ecf6;
+    background-color: #171d28;
+  }
+
+  option:checked {
+    color: #ffffff;
+    background-color: #344a8a;
   }
 
   ::-webkit-scrollbar {
@@ -320,3 +350,213 @@
     }
   }
 }
+
+[data-theme="light"] {
+    color-scheme: light;
+    --background: #f3f5f9;
+    --foreground: #202938;
+    --card: #ffffff;
+    --card-foreground: #202938;
+    --popover: #ffffff;
+    --popover-foreground: #202938;
+    --secondary: #e9edf4;
+    --secondary-foreground: #293447;
+    --muted: #e9edf4;
+    --muted-foreground: #657187;
+    --accent: #e8edfa;
+    --accent-foreground: #243354;
+    --border: #dce2ec;
+    --input: #d2dae6;
+  }
+
+  [data-theme="light"] select {
+    color-scheme: light;
+  }
+
+  [data-theme="light"] option {
+    color: #202938;
+    background-color: #ffffff;
+  }
+
+  [data-theme="light"] option:checked {
+    color: #ffffff;
+    background-color: #4c69db;
+  }
+
+  [data-theme="light"] .auth-card {
+    border-color: #d4ddea;
+    background: linear-gradient(145deg, #ffffff 0%, #f7f9fd 100%);
+    box-shadow: 0 24px 80px rgb(20 35 60 / 14%);
+  }
+
+  [data-theme="light"] .auth-email-field,
+  [data-theme="light"] .auth-input {
+    border-color: #c5cfdd;
+    background-color: #ffffff;
+  }
+
+  [data-theme="light"] .auth-email-field:focus-within,
+  [data-theme="light"] .auth-input:focus {
+    border-color: #4c69db;
+    background-color: #ffffff;
+    box-shadow: 0 0 0 3px rgb(76 105 219 / 15%);
+  }
+
+  [data-theme="light"] .auth-card h1 {
+    color: #202938;
+  }
+
+  [data-theme="light"] .auth-card label {
+    color: #46536a;
+  }
+
+  [data-theme="light"] .auth-card .text-slate-500 {
+    color: #657187;
+  }
+
+  [data-theme="light"] .auth-email-field svg {
+    color: #657187;
+  }
+
+  [data-theme="light"] .auth-input {
+    color: #202938;
+  }
+
+  [data-theme="light"] body {
+    background-color: #f3f5f9;
+    color: #202938;
+  }
+
+  [data-theme="light"] .workspace-shell {
+    background-color: #f3f5f9;
+    color: #202938;
+  }
+
+  [data-theme="light"] .workspace-shell header {
+    border-color: #e0e5ed;
+    background-color: rgb(255 255 255 / 92%);
+  }
+
+  [data-theme="light"] .workspace-shell main [class*="bg-[#11161e]"],
+  [data-theme="light"] .workspace-shell main [class*="bg-[#141923]"],
+  [data-theme="light"] .workspace-shell header [class*="bg-[#11161e]"],
+  [data-theme="light"] .workspace-shell [role="dialog"] [class*="bg-[#11161e]"] {
+    background-color: #ffffff;
+  }
+
+  [data-theme="light"] .workspace-shell [class*="bg-[#0b0d12]"] {
+    background-color: #f3f5f9;
+  }
+
+  [data-theme="light"] .workspace-shell main [class*="bg-white/"],
+  [data-theme="light"] .workspace-shell header [class*="bg-white/"],
+  [data-theme="light"] .workspace-shell main [class*="bg-white["],
+  [data-theme="light"] .workspace-shell header [class*="bg-white["],
+  [data-theme="light"] .workspace-shell [role="dialog"] [class*="bg-white/"] {
+    background-color: #f1f4f8;
+  }
+
+  [data-theme="light"] .workspace-shell main .rounded-xl.border,
+  [data-theme="light"] .workspace-shell main .rounded-2xl.border,
+  [data-theme="light"] .workspace-shell header .rounded-xl.border,
+  [data-theme="light"] .workspace-shell [role="dialog"] .rounded-xl.border {
+    border-color: #dce2ec;
+    background-color: #ffffff;
+    box-shadow: 0 8px 24px rgb(34 48 71 / 6%);
+  }
+
+  [data-theme="light"] .workspace-shell main [class*="border-white/"],
+  [data-theme="light"] .workspace-shell header [class*="border-white/"],
+  [data-theme="light"] .workspace-shell [role="dialog"] [class*="border-white/"] {
+    border-color: #dce2ec;
+  }
+
+  [data-theme="light"] .workspace-shell main .text-white,
+  [data-theme="light"] .workspace-shell main .text-slate-100,
+  [data-theme="light"] .workspace-shell main .text-slate-200,
+  [data-theme="light"] .workspace-shell main .text-slate-300,
+  [data-theme="light"] .workspace-shell header .text-white,
+  [data-theme="light"] .workspace-shell header .text-slate-100,
+  [data-theme="light"] .workspace-shell header .text-slate-200,
+  [data-theme="light"] .workspace-shell header .text-slate-300,
+  [data-theme="light"] .workspace-shell [role="dialog"] .text-white,
+  [data-theme="light"] .workspace-shell [role="dialog"] .text-slate-100,
+  [data-theme="light"] .workspace-shell [role="dialog"] .text-slate-200,
+  [data-theme="light"] .workspace-shell [role="dialog"] .text-slate-300 {
+    color: #202938;
+  }
+
+  [data-theme="light"] .workspace-shell main .text-slate-400,
+  [data-theme="light"] .workspace-shell header .text-slate-400,
+  [data-theme="light"] .workspace-shell [role="dialog"] .text-slate-400 {
+    color: #657187;
+  }
+
+  [data-theme="light"] .workspace-shell main .text-slate-500,
+  [data-theme="light"] .workspace-shell header .text-slate-500,
+  [data-theme="light"] .workspace-shell [role="dialog"] .text-slate-500 {
+    color: #707d91;
+  }
+
+  [data-theme="light"] .workspace-shell main .text-slate-600,
+  [data-theme="light"] .workspace-shell header .text-slate-600,
+  [data-theme="light"] .workspace-shell [role="dialog"] .text-slate-600 {
+    color: #7b8799;
+  }
+
+  [data-theme="light"] .workspace-shell main input:not([type="checkbox"]):not([type="radio"]),
+  [data-theme="light"] .workspace-shell main select,
+  [data-theme="light"] .workspace-shell main textarea,
+  [data-theme="light"] .workspace-shell header input,
+  [data-theme="light"] .workspace-shell [role="dialog"] input {
+    border-color: #d2dae6;
+    background-color: #ffffff;
+    color: #202938;
+  }
+
+  [data-theme="light"] .workspace-shell main input::placeholder,
+  [data-theme="light"] .workspace-shell header input::placeholder {
+    color: #8792a5;
+  }
+
+  [data-theme="light"] .workspace-shell main th {
+    color: #657187;
+  }
+
+  [data-theme="light"] .workspace-shell main td {
+    color: #354156;
+  }
+
+  [data-theme="light"] .workspace-shell main tr + tr td {
+    border-color: #e4e8ef;
+  }
+
+  [data-theme="light"] .workspace-shell aside {
+    border-color: #252d3b;
+    background-color: #0f1219;
+    color: #f1f4fa;
+  }
+
+  [data-theme="light"] .workspace-shell aside .text-slate-100 {
+    color: #f1f4fa;
+  }
+
+  [data-theme="light"] .workspace-shell aside .text-slate-200 {
+    color: #dce3ef;
+  }
+
+  [data-theme="light"] .workspace-shell aside .text-slate-300 {
+    color: #c4cede;
+  }
+
+  [data-theme="light"] .workspace-shell aside .text-slate-400 {
+    color: #a6b0c2;
+  }
+
+  [data-theme="light"] .workspace-shell aside .text-slate-500 {
+    color: #8b97aa;
+  }
+
+  [data-theme="light"] .workspace-shell aside [class*="border-white/"] {
+    border-color: #252d3b;
+  }

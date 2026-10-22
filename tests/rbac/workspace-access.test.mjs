@@ -5,6 +5,7 @@ import { hasWorkspaceAccess, normalizeWorkspaceRoleName } from '../../lib/worksp
 test('denies routes when no explicit permission is present', () => {
   assert.equal(hasWorkspaceAccess([], 'clientes'), false)
   assert.equal(hasWorkspaceAccess(['clients:update'], 'clientes'), false)
+  assert.equal(hasWorkspaceAccess(['support:create'], 'suporte'), false)
   assert.equal(hasWorkspaceAccess(['clients:view'], 'unknown-module'), false)
 })
 
