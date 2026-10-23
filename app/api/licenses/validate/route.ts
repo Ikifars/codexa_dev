@@ -41,7 +41,7 @@ export async function POST(request: Request) {
   const keyHash = createHash('sha256').update(match[1]).digest('hex')
   const { data: license, error: licenseError } = await supabase
     .from('licenses')
-    .select('id,system_id,status,expires_at')
+    .select('id,system_id,status,is_active,expires_at')
     .eq('license_key_hash', keyHash)
     .maybeSingle()
   if (licenseError) {
@@ -51,7 +51,7 @@ export async function POST(request: Request) {
   if (!license) return json({ valid: false, reason: 'invalid_key', expiresAt: null, modules: [] }, 401)
 
   const normalizedStatus = typeof license.status === 'string' ? license.status.trim().toLowerCase() : ''
-  const active = normalizedStatus === 'active' || normalizedStatus === 'ativa'
+  const active = license.is_active === true && (normalizedStatus === 'active' || normalizedStatus === 'ativa')
   const expired = license.expires_at !== null && new Date(license.expires_at).getTime() <= Date.now()
   if (!active || expired) {
     return json({
