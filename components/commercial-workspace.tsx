@@ -11,6 +11,9 @@ type Contract = { id: string; contract_number: string; title: string; status: st
 type Proposal = { id: string; proposal_number: string; title: string; status: string; total: number; valid_until: string | null; client_id: string | null; lead_id: string | null; description: string | null }
 type Client = { id: string; legal_name: string; trade_name: string | null }
 
+const proposalStatuses = ['Rascunho', 'Enviada', 'Em negociação', 'Aprovada', 'Rejeitada', 'Cancelada', 'Expirada'] as const
+const proposalStatusSet = new Set<string>(proposalStatuses)
+
 const inputClass = 'w-full rounded-lg border border-white/10 bg-[#151b24] p-3 text-sm text-white'
 const currency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(value || 0))
 
@@ -69,6 +72,8 @@ export function CommercialWorkspace({ initialTab = 'proposals', permissions = []
         const unit = Number(data.unit_value || 0)
         const quantity = Number(data.quantity || 1)
         const discount = Number(data.discount || 0)
+        const status = String(data.status || 'Rascunho')
+        if (!proposalStatusSet.has(status)) throw new Error('Status de proposta inválido.')
         const { error: insertError } = await client.from('proposals').insert({
           proposal_number: `PROP-${Date.now()}`,
           title: data.title,
@@ -79,6 +84,7 @@ export function CommercialWorkspace({ initialTab = 'proposals', permissions = []
           total: Math.max(0, unit * quantity - discount),
           valid_until: data.valid_until || null,
           client_id: data.client_id || null,
+          status,
         })
         if (insertError) throw insertError
       } else {
@@ -126,9 +132,15 @@ export function CommercialWorkspace({ initialTab = 'proposals', permissions = []
     setSaving(true)
     setError('')
     const data = Object.fromEntries(new FormData(event.currentTarget))
+    const proposalStatus = String(data.status || '')
+    if (tab === 'proposals' && !proposalStatusSet.has(proposalStatus)) {
+      setError('Selecione um status válido para a proposta.')
+      setSaving(false)
+      return
+    }
     const payload = tab === 'contracts'
       ? { title: data.title, description: data.description || null, contract_type: data.contract_type || 'Prestação de serviços', client_id: data.client_id || null, starts_at: data.starts_at || null, ends_at: data.ends_at || null, contracted_value: Number(data.amount || 0), status: data.status, observations: data.observations || null }
-      : { title: data.title, description: data.description || null, client_id: data.client_id || null, total: Number(data.amount || 0), valid_until: data.valid_until || null, status: data.status }
+      : { title: data.title, description: data.description || null, client_id: data.client_id || null, total: Number(data.amount || 0), valid_until: data.valid_until || null, status: proposalStatus }
     const { error: updateError } = await createClient().from(tab).update(payload).eq('id', record.id)
     if (updateError) {
       console.error('Commercial record update failed:', updateError.message)
@@ -175,7 +187,7 @@ export function CommercialWorkspace({ initialTab = 'proposals', permissions = []
     </div>}
     {modal && <div className="fixed inset-0 z-50 grid place-items-center bg-black/70 p-4"><form onSubmit={submit} className="w-full max-w-lg rounded-2xl border border-white/10 bg-[#11161e] p-6">
       <div className="flex items-center justify-between"><h3 className="text-lg font-semibold text-white">Novo {tab === 'contracts' ? 'contrato' : 'proposta'}</h3><button type="button" onClick={() => setModal(false)} aria-label="Fechar"><X className="text-slate-400" /></button></div>
-      <div className="mt-5 grid gap-3"><input name="title" required placeholder="Título" className={inputClass} /><select name="client_id" className={inputClass}><option value="">Cliente</option>{clients.map((client) => <option key={client.id} value={client.id}>{client.trade_name || client.legal_name}</option>)}</select><input name="contracted_value" type="number" step="0.01" placeholder="Valor contratado" className={inputClass} />{tab === 'contracts' && <label className="rounded-lg border border-dashed border-violet-400/30 p-4 text-xs text-slate-400">PDF do contrato<input name="document" type="file" accept="application/pdf,.pdf" className="mt-2 block w-full text-xs" /></label>}<textarea name="description" placeholder="Descrição ou observações" className={`${inputClass} min-h-24`} /></div>
+      <div className="mt-5 grid gap-3"><input name="title" required placeholder="Título" className={inputClass} /><select name="client_id" className={inputClass}><option value="">Cliente</option>{clients.map((client) => <option key={client.id} value={client.id}>{client.trade_name || client.legal_name}</option>)}</select>{tab === 'proposals' && <label className="text-xs text-slate-400">Status<select name="status" defaultValue="Rascunho" className={`${inputClass} mt-1`}>{proposalStatuses.map((status) => <option key={status} value={status}>{status}</option>)}</select></label>}<input name={tab === 'proposals' ? 'unit_value' : 'contracted_value'} type="number" step="0.01" placeholder={tab === 'proposals' ? 'Valor unitário' : 'Valor contratado'} className={inputClass} />{tab === 'contracts' && <label className="rounded-lg border border-dashed border-violet-400/30 p-4 text-xs text-slate-400">PDF do contrato<input name="document" type="file" accept="application/pdf,.pdf" className="mt-2 block w-full text-xs" /></label>}{tab === 'proposals' && <><input name="quantity" type="number" min="1" step="1" defaultValue="1" placeholder="Quantidade" className={inputClass} /><input name="discount" type="number" min="0" step="0.01" defaultValue="0" placeholder="Desconto" className={inputClass} /><input name="item_description" required placeholder="Descrição do item" className={inputClass} /></>}<textarea name="description" placeholder="Descrição ou observações" className={`${inputClass} min-h-24`} /></div>
       {error && <p role="alert" className="mt-4 rounded-lg bg-amber-400/10 p-3 text-xs text-amber-300">{error}</p>}<button disabled={saving} className="mt-5 flex w-full items-center justify-center gap-2 rounded-lg bg-violet-500 py-3 text-sm font-semibold text-white">{saving && <Loader2 className="size-4 animate-spin" />}Salvar</button>
     </form></div>}
     {record && <div className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-black/70 p-4" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setRecord(null) }}>
@@ -184,7 +196,7 @@ export function CommercialWorkspace({ initialTab = 'proposals', permissions = []
         {editingRecord ? <form onSubmit={(event) => void saveRecord(event)} className="mt-5 grid gap-3 sm:grid-cols-2">
           <label className="text-xs text-slate-400 sm:col-span-2">Título<input name="title" required defaultValue={record.title} className={`${inputClass} mt-1`} /></label>
           <label className="text-xs text-slate-400">Cliente<select name="client_id" defaultValue={record.client_id || ''} className={`${inputClass} mt-1`}><option value="">Sem cliente</option>{clients.map((client) => <option key={client.id} value={client.id}>{client.trade_name || client.legal_name}</option>)}</select></label>
-          <label className="text-xs text-slate-400">Status<input name="status" required defaultValue={record.status} className={`${inputClass} mt-1`} /></label>
+          <label className="text-xs text-slate-400">Status{'contract_number' in record ? <input name="status" required defaultValue={record.status} className={`${inputClass} mt-1`} /> : <select name="status" required defaultValue={record.status} className={`${inputClass} mt-1`}>{!proposalStatusSet.has(record.status) && <option value={record.status}>{record.status}</option>}{proposalStatuses.map((status) => <option key={status} value={status}>{status}</option>)}</select>}</label>
           <label className="text-xs text-slate-400">Valor (R$)<input name="amount" type="number" min="0" step="0.01" defaultValue={'contracted_value' in record ? record.contracted_value : record.total} className={`${inputClass} mt-1`} /></label>
           {'contract_number' in record ? <>
             <label className="text-xs text-slate-400">Tipo<input name="contract_type" defaultValue={record.contract_type || ''} className={`${inputClass} mt-1`} /></label>
