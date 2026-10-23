@@ -30,6 +30,7 @@ type LicenseData = { clients: Client[]; systems: System[]; licenses: License[] }
 
 const inputClass = 'field rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-2.5 text-sm text-slate-200 outline-none placeholder:text-slate-600 focus:border-blue-400/60'
 const statusNames: Record<string, string> = { active: 'Ativa', suspended: 'Suspensa', revoked: 'Revogada' }
+const defaultLicenseSiteUrl = 'https://gestao-de-software-house.vercel.app'
 
 function licenseStatusLabel(license: License) {
   if (license.status === 'active' && license.expires_at && new Date(license.expires_at).getTime() < Date.now()) return 'Expirada'
@@ -60,7 +61,7 @@ export function LicenseWorkspace({ permissions }: { permissions: string[] }) {
   const [newLicenseKey, setNewLicenseKey] = useState('')
   const [selectedClient, setSelectedClient] = useState('')
   const [selectedSystem, setSelectedSystem] = useState('')
-  const [scriptOrigin, setScriptOrigin] = useState('')
+  const [scriptOrigin, setScriptOrigin] = useState(defaultLicenseSiteUrl)
 
   async function load() {
     setLoading(true)
@@ -76,7 +77,6 @@ export function LicenseWorkspace({ permissions }: { permissions: string[] }) {
 
   useEffect(() => {
     void load()
-    setScriptOrigin(window.location.origin)
   }, [])
 
   const visibleSystems = useMemo(
@@ -229,8 +229,12 @@ export function LicenseWorkspace({ permissions }: { permissions: string[] }) {
     </div>}
 
     {showForm && <form onSubmit={(event) => void createLicense(event)} className="rounded-xl border border-white/[0.07] bg-[#11161e] p-5">
-      <div className="mb-4"><h2 className="text-sm font-semibold text-white">Emitir licença</h2><p className="mt-1 text-xs text-slate-500">A chave é gerada aleatoriamente e armazenada somente como hash.</p></div>
+      <div className="mb-4"><h2 className="text-sm font-semibold text-white">Emitir licença</h2><p className="mt-1 text-xs text-slate-500">A chave é gerada aleatoriamente e armazenada somente como hash. Informe a URL pública que hospedará o script de validação.</p></div>
       <div className="grid gap-4 sm:grid-cols-3">
+        <label className="text-xs text-slate-500">URL pública do site
+          <input name="siteUrl" type="url" value={scriptOrigin} onChange={(event) => setScriptOrigin(event.target.value.replace(/\/$/, ''))} placeholder={defaultLicenseSiteUrl} required className={`${inputClass} mt-2 w-full`} />
+          <span className="mt-1 block text-[11px] text-slate-600">Será usada no script entregue ao cliente. Padrão: {defaultLicenseSiteUrl}</span>
+        </label>
         <label className="text-xs text-slate-500">Cliente
           <select required name="clientId" value={selectedClient} onChange={(event) => { setSelectedClient(event.target.value); setSelectedSystem('') }} className={`${inputClass} mt-2 w-full`}>
             <option value="">Selecione o cliente</option>{data.clients.map((client) => <option key={client.id} value={client.id}>{client.name}</option>)}
