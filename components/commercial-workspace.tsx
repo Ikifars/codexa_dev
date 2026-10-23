@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import { EntityAttachments } from '@/components/entity-attachments'
 import { uploadContractAttachment } from '@/lib/contract-attachments'
 import { BriefcaseBusiness, Eye, FileText, Loader2, Pencil, Plus, Search, Trash2, X } from 'lucide-react'
+import { ListingControls } from '@/components/listing-controls'
 
 type Tab = 'proposals' | 'contracts'
 type Contract = { id: string; contract_number: string; title: string; status: string; contracted_value: number; ends_at: string | null; client_id: string | null; proposal_id: string | null; contract_type: string | null; description: string | null; starts_at: string | null; observations: string | null }
@@ -23,6 +24,8 @@ export function CommercialWorkspace({ initialTab = 'proposals', permissions = []
   const [proposals, setProposals] = useState<Proposal[]>([])
   const [clients, setClients] = useState<Client[]>([])
   const [query, setQuery] = useState('')
+  const [statusFilter, setStatusFilter] = useState('')
+  const [page, setPage] = useState(0)
   const [modal, setModal] = useState(false)
   const [record, setRecord] = useState<Contract | Proposal | null>(null)
   const [editingRecord, setEditingRecord] = useState(false)
@@ -50,9 +53,11 @@ export function CommercialWorkspace({ initialTab = 'proposals', permissions = []
   const rows = useMemo(() => {
     const term = query.toLowerCase()
     return tab === 'contracts'
-      ? contracts.filter((item) => `${item.contract_number} ${item.title} ${item.status}`.toLowerCase().includes(term))
-      : proposals.filter((item) => `${item.proposal_number} ${item.title} ${item.status}`.toLowerCase().includes(term))
-  }, [tab, contracts, proposals, query])
+      ? contracts.filter((item) => `${item.contract_number} ${item.title} ${item.status}`.toLowerCase().includes(term) && (!statusFilter || item.status === statusFilter))
+      : proposals.filter((item) => `${item.proposal_number} ${item.title} ${item.status}`.toLowerCase().includes(term) && (!statusFilter || item.status === statusFilter))
+  }, [tab, contracts, proposals, query, statusFilter])
+  const pageRows = rows.slice(page * 10, page * 10 + 10)
+  const statusOptions = [...new Set(rows.map((item) => item.status).filter(Boolean))]
   const canCreate = permissions.includes('*') || permissions.includes(`${tab}:create`)
   const canUpdate = permissions.includes('*') || permissions.includes(`${tab}:update`)
   const canDelete = permissions.includes('*') || permissions.includes(`${tab}:delete`)
@@ -144,7 +149,7 @@ export function CommercialWorkspace({ initialTab = 'proposals', permissions = []
     const { error: updateError } = await createClient().from(tab).update(payload).eq('id', record.id)
     if (updateError) {
       console.error('Commercial record update failed:', updateError.message)
-      setError(`Não foi possível salvar as alterações: ${updateError.message}`)
+      setError(`Não foi possível salvar as alteraç��es: ${updateError.message}`)
     } else {
       setEditingRecord(false)
       setRecord(null)
@@ -173,10 +178,13 @@ export function CommercialWorkspace({ initialTab = 'proposals', permissions = []
         <button disabled={!canCreate} title={canCreate ? undefined : 'Seu cargo não tem permissão para criar neste módulo'} onClick={() => { setError(''); setModal(true) }} className="rounded-lg bg-white px-3 py-2 text-xs font-semibold text-slate-900 disabled:cursor-not-allowed disabled:opacity-50"><Plus className="mr-1 inline size-3.5" />Novo</button>
       </div>
     </div>
-    <div className="flex gap-2 border-b border-white/[0.07] p-4"><Search className="size-4 text-slate-600" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Pesquisar..." className="w-full bg-transparent text-sm text-white outline-none" /></div>
+    <div className="flex gap-2 border-b border-white/[0.07] p-4"><Search className="size-4 text-slate-600" /><input value={query} onChange={(event) => { setQuery(event.target.value); setPage(0) }} placeholder="Pesquisar..." className="w-full bg-transparent text-sm text-white outline-none" /></div>
+    <ListingControls total={rows.length} page={page} onPageChange={setPage} hasActiveFilters={Boolean(statusFilter)} onClear={() => { setStatusFilter(''); setPage(0) }}>
+      <label className="text-xs text-slate-400">Status<select value={statusFilter} onChange={(event) => { setStatusFilter(event.target.value); setPage(0) }} className={`${inputClass} mt-1 min-w-44`}><option value="">Todos os status</option>{statusOptions.map((status) => <option key={status}>{status}</option>)}</select></label>
+    </ListingControls>
     {error && <p role="alert" className="m-4 rounded-lg bg-amber-400/10 p-3 text-xs text-amber-300">{error}</p>}
     {loading ? <div className="p-8 text-center text-xs text-slate-500">Carregando...</div> : <div className="divide-y divide-white/[0.06]">
-      {rows.map((row) => <div key={row.id} className="flex items-center gap-3 p-4">
+      {pageRows.map((row) => <div key={row.id} className="flex items-center gap-3 p-4">
         <div className="grid size-9 place-items-center rounded-lg bg-violet-500/10 text-violet-300">{tab === 'contracts' ? <BriefcaseBusiness className="size-4" /> : <FileText className="size-4" />}</div>
         <div className="min-w-0 flex-1"><p className="truncate text-sm font-medium text-slate-200">{row.title}</p><p className="text-xs text-slate-500">{'contract_number' in row ? row.contract_number : row.proposal_number} · {row.status}</p></div>
         <button onClick={() => { setRecord(row); setEditingRecord(false); setError('') }} aria-label={`Ver detalhes de ${row.title}`} title="Ver detalhes e anexos" className="inline-flex items-center gap-1.5 rounded-lg border border-white/[0.08] px-2.5 py-2 text-xs text-slate-300 hover:bg-white/[0.04]"><Eye className="size-3.5" />Detalhes</button>
