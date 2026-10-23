@@ -8,7 +8,24 @@ export const runtime = 'nodejs'
 function json(data: unknown, status = 200) {
   return NextResponse.json(data, {
     status,
-    headers: { 'Cache-Control': 'no-store, max-age=0' },
+    headers: {
+      'Cache-Control': 'no-store, max-age=0',
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'Authorization, Accept, Content-Type',
+    },
+  })
+}
+
+export function OPTIONS() {
+  return new Response(null, {
+    status: 204,
+    headers: {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'Authorization, Accept, Content-Type',
+      'Access-Control-Max-Age': '600',
+    },
   })
 }
 

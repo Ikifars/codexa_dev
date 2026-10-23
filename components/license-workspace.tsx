@@ -221,7 +221,7 @@ export function LicenseWorkspace({ permissions }: { permissions: string[] }) {
           <p className="text-sm font-medium text-blue-100">Chave de licença — exibida uma única vez</p>
           <code className="mt-2 block break-all rounded-lg bg-black/20 p-3 text-xs text-slate-200">{newLicenseKey}</code>
           <p className="mt-4 text-xs font-medium text-blue-100">Script para entregar ao cliente</p>
-          <code className="mt-2 block break-all rounded-lg bg-black/20 p-3 text-xs text-slate-300">{`<script src="${scriptOrigin}/client-script.js?token=${newLicenseKey}" defer></script>`}</code>
+          <code className="mt-2 block break-all rounded-lg bg-black/20 p-3 text-xs text-slate-300">{`<script src="${scriptOrigin}/api/client-script.js?token=${newLicenseKey}" defer></script>`}</code>
           <button onClick={() => void copyKey()} className="mt-3 flex items-center gap-2 rounded-lg border border-white/10 px-3 py-2 text-xs text-slate-200 hover:bg-white/5"><Copy className="size-3.5" />Copiar chave</button>
         </div>
         <button onClick={() => setNewLicenseKey('')} aria-label="Ocultar chave" className="rounded p-1 text-slate-500 hover:text-white"><X className="size-4" /></button>
