@@ -254,7 +254,7 @@ export function LicenseWorkspace({ permissions }: { permissions: string[] }) {
         const client = data.clients.find((item) => item.id === license.client_id)?.name ?? 'Cliente não encontrado'
         const system = data.systems.find((item) => item.id === license.system_id)?.name ?? 'Sistema não encontrado'
         return <article key={license.id} className="rounded-xl border border-white/[0.07] bg-[#11161e]">
-          <div className="grid gap-4 border-b border-white/[0.06] p-5 lg:grid-cols-[1fr_150px_190px_auto] lg:items-center">
+          <div className="grid gap-3 border-b border-white/[0.06] px-4 py-3 lg:grid-cols-[1fr_130px_165px_auto] lg:items-center">
             <div><p className="text-sm font-medium text-white">{client}</p><p className="mt-1 text-xs text-slate-500">{system}</p><p className="mt-2 text-[11px] text-slate-600">Criada em {new Date(license.created_at).toLocaleDateString('pt-BR')}</p></div>
             {canManage ? <label className="text-[11px] text-slate-500">Status
               <span className={`mt-1.5 block text-xs font-medium ${licenseStatusLabel(license) === 'Ativa' ? 'text-emerald-200' : 'text-amber-100'}`}>{licenseStatusLabel(license)}</span>

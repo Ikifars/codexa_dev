@@ -77,6 +77,12 @@ const actionLabels: Record<string, string> = {
 
 const inputClass = 'mt-1.5 w-full rounded-lg border border-white/[0.08] bg-[#0d1118] px-3 py-2.5 text-sm text-slate-200 outline-none focus:border-blue-400/60'
 
+function PermissionSwitch({ checked, disabled, label, onChange }: { checked: boolean; disabled?: boolean; label: string; onChange: (checked: boolean) => void }) {
+  return <button type="button" role="switch" aria-checked={checked} aria-label={label} disabled={disabled} onClick={() => onChange(!checked)} className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full border transition-colors ${checked ? 'border-blue-400/60 bg-blue-500' : 'border-white/10 bg-white/[0.08]'} disabled:cursor-not-allowed disabled:opacity-40`}>
+    <span className={`size-4 rounded-full bg-white shadow-sm transition-transform ${checked ? 'translate-x-5' : 'translate-x-1'}`} />
+  </button>
+}
+
 async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, {
     ...init,
@@ -380,16 +386,17 @@ export function RoleManagementWorkspace({ initialView = 'roles' }: { initialView
                 const modulePermissions = new Map<string, Permission[]>()
                 for (const permission of entries) modulePermissions.set(permission.module_name, [...(modulePermissions.get(permission.module_name) ?? []), permission])
                 return <section key={group} className="rounded-lg border border-white/[0.06]">
-                  <h3 className="border-b border-white/[0.06] px-4 py-2.5 text-xs font-semibold uppercase tracking-wide text-blue-300">{group}</h3>
+                  <div className="flex items-center justify-between gap-3 border-b border-white/[0.06] px-4 py-2.5"><h3 className="text-xs font-semibold uppercase tracking-wide text-blue-300">{group}</h3><button type="button" disabled={roleName.toLowerCase() === 'admin'} onClick={() => toggleModulePermissions(group, entries)} className="rounded-md border border-blue-400/20 px-2 py-1 text-[10px] font-medium text-blue-200 hover:bg-blue-400/10 disabled:cursor-not-allowed disabled:opacity-50">Liberar setor</button></div>
                   <div className="divide-y divide-white/[0.04]">{[...modulePermissions].map(([module, actions]) => { const moduleKeys = actions.map((permission) => `${permission.module_name}:${permission.action_name}`); const selectedCount = moduleKeys.filter((key) => roleName.toLowerCase() === 'admin' || roleGrants.includes(key)).length; return <div key={module} className="grid gap-3 px-4 py-3 md:grid-cols-[190px_1fr]">
                     <div><p className="text-xs font-medium text-slate-300">{moduleLabels[module] ?? module}</p><p className="mt-1 text-[10px] text-slate-600">{selectedCount}/{actions.length} liberadas</p></div>
-                    <div className="flex flex-wrap items-center gap-x-4 gap-y-2"><button type="button" disabled={roleName.toLowerCase() === 'admin'} onClick={() => toggleModulePermissions(module, actions)} className="rounded-md border border-blue-400/20 px-2 py-1 text-[10px] font-medium text-blue-200 hover:bg-blue-400/10 disabled:cursor-not-allowed disabled:opacity-50">{selectedCount === actions.length ? 'Bloquear módulo' : 'Liberar módulo'}</button>{actions.map((permission) => {
+                    <div className="grid gap-2 sm:grid-cols-2">{actions.map((permission) => {
                       const key = `${permission.module_name}:${permission.action_name}`
                       const checked = roleName.toLowerCase() === 'admin' || roleGrants.includes(key)
-                      return <label key={permission.id} className={`flex items-center gap-1.5 text-[11px] ${roleName.toLowerCase() === 'admin' ? 'text-amber-200' : 'text-slate-400'}`}>
-                        <input type="checkbox" checked={checked} disabled={roleName.toLowerCase() === 'admin'} onChange={(event) => togglePermission(permission, event.target.checked)} className="accent-blue-500" />
-                        {actionLabels[permission.action_name] ?? permission.action_name}
-                      </label>
+                      const actionLabel = actionLabels[permission.action_name] ?? permission.action_name
+                      return <div key={permission.id} className={`flex items-center justify-between gap-3 rounded-lg border px-3 py-2 ${checked ? 'border-blue-400/20 bg-blue-400/[0.06]' : 'border-white/[0.06] bg-white/[0.015]'}`}>
+                        <span className={`text-[11px] ${checked ? 'text-slate-200' : 'text-slate-500'}`}>{actionLabel}</span>
+                        <PermissionSwitch checked={checked} disabled={roleName.toLowerCase() === 'admin'} label={`${checked ? 'Bloquear' : 'Liberar'} ${actionLabel} em ${moduleLabels[module] ?? module}`} onChange={(value) => togglePermission(permission, value)} />
+                      </div>
                     })}</div>
                   </div>})}</div>
                 </section>
