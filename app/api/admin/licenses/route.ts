@@ -120,6 +120,7 @@ export async function POST(request: Request) {
         plan_id: system.plan_id,
         contract_id: system.contract_id,
         status: 'active',
+        is_active: true,
         expires_at: expiresAt,
         license_key: null,
         license_key_hash: licenseKeyHash,
