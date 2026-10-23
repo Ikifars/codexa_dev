@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react'
 import { Check, Copy, KeyRound, Loader2, Plus, Search, ShieldCheck, Trash2, X } from 'lucide-react'
 import { isModuleAvailable } from '@/lib/licensing/module-status'
+import { IntegrationHelp } from '@/components/integration-help'
 
 type Client = { id: string; name: string }
 type System = { id: string; name: string; client_id: string | null }
@@ -199,7 +200,7 @@ export function LicenseWorkspace({ permissions }: { permissions: string[] }) {
       <div>
         <p className="mb-2 text-xs font-medium uppercase tracking-[0.16em] text-blue-400">Produtos e acesso</p>
         <h1 className="text-2xl font-semibold text-white">Licenças</h1>
-        <p className="mt-1.5 text-sm text-slate-500">Gerencie chaves, validade, contratação e liberação dos módulos por sistema.</p>
+        <div className="flex items-start gap-2"><p className="mt-1.5 text-sm text-slate-500">Gerencie chaves, validade, contratação e liberação dos módulos por sistema.</p><IntegrationHelp title="licenças" steps={['Selecione o cliente e o sistema que receberão a licença.', 'Defina a validade, se houver, e emita a licença.', 'Dentro da licença, marque primeiro os módulos contratados.', 'Depois marque Liberado apenas para módulos disponíveis ao cliente.', 'Altere status ou validade quando o acesso precisar ser suspenso ou renovado.']} /></div>
       </div>
       {canManage && <button onClick={() => { setShowForm((value) => !value); setError('') }} className="flex w-fit items-center gap-2 rounded-lg bg-blue-500 px-3.5 py-2.5 text-xs font-semibold text-white hover:bg-blue-400">
         {showForm ? <X className="size-4" /> : <Plus className="size-4" />}{showForm ? 'Fechar' : 'Nova licença'}
