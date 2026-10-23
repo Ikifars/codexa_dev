@@ -2,7 +2,7 @@
 
 import Image from 'next/image'
 import Link from 'next/link'
-import { ArrowUpRight, BarChart3, Blocks, ChevronRight, Code2, LineChart, ShieldCheck, Sparkles, Workflow } from 'lucide-react'
+import { ArrowUpRight, Blocks, ChevronRight, Code2, ShieldCheck, Sparkles, Workflow } from 'lucide-react'
 
 const services = [
   { icon: Code2, title: 'Sites que convertem', description: 'Landing pages e sites institucionais rápidos, estratégicos e desenhados para transformar atenção em oportunidade.' },
@@ -53,15 +53,22 @@ export function PublicLanding() {
           </div>
 
           <div className="relative mx-auto w-full max-w-[31rem] lg:ml-auto">
-            <div className="absolute -inset-8 rounded-[3rem] bg-cyan-300/10 blur-3xl" />
-            <div className="relative overflow-hidden rounded-[1.75rem] border border-white/15 bg-[#0e131c]/90 p-3 shadow-2xl shadow-cyan-950/40 backdrop-blur-xl">
-              <div className="rounded-[1.2rem] border border-white/10 bg-[#111923] p-5">
-                <div className="flex items-center justify-between"><div><p className="text-[10px] uppercase tracking-[0.17em] text-slate-500">Projeto em destaque</p><p className="mt-1 text-sm font-semibold text-white">Experiência digital sob medida</p></div><div className="flex gap-1.5"><span className="size-2 rounded-full bg-rose-300/70" /><span className="size-2 rounded-full bg-amber-300/70" /><span className="size-2 rounded-full bg-emerald-300/70" /></div></div>
-                <div className="mt-7 grid grid-cols-2 gap-3"><div className="rounded-xl border border-white/10 bg-white/[0.035] p-4"><BarChart3 className="size-4 text-cyan-300" /><p className="mt-6 text-[10px] text-slate-500">Receita no mês</p><p className="mt-1 text-xl font-semibold text-white">R$ 84,2k</p><p className="mt-1 text-[10px] text-emerald-300">+18,4% vs. mês anterior</p></div><div className="rounded-xl border border-white/10 bg-white/[0.035] p-4"><LineChart className="size-4 text-violet-300" /><p className="mt-6 text-[10px] text-slate-500">Projetos ativos</p><p className="mt-1 text-xl font-semibold text-white">24</p><p className="mt-1 text-[10px] text-slate-400">8 em produção</p></div></div>
-                <div className="mt-3 rounded-xl border border-white/10 bg-white/[0.035] p-4"><div className="flex items-center justify-between"><p className="text-xs font-medium text-slate-300">Pipeline comercial</p><span className="text-[10px] text-cyan-300">Ver detalhes</span></div><div className="mt-5 flex h-24 items-end gap-2"><span className="h-[34%] flex-1 rounded-t bg-cyan-300/25" /><span className="h-[52%] flex-1 rounded-t bg-cyan-300/35" /><span className="h-[45%] flex-1 rounded-t bg-cyan-300/45" /><span className="h-[70%] flex-1 rounded-t bg-cyan-300/60" /><span className="h-[82%] flex-1 rounded-t bg-cyan-300/80" /><span className="h-full flex-1 rounded-t bg-cyan-300" /></div></div>
+            <div className="absolute -inset-10 rounded-full bg-cyan-300/10 blur-3xl" />
+            <div className="relative grid gap-3 sm:grid-cols-2">
+              <div className="rounded-3xl border border-cyan-300/25 bg-gradient-to-br from-cyan-300/[0.16] to-white/[0.03] p-6 shadow-2xl shadow-cyan-950/30">
+                <Code2 className="size-6 text-cyan-200" />
+                <p className="mt-16 text-xs font-semibold uppercase tracking-[0.16em] text-cyan-100">Web design</p>
+                <p className="mt-3 text-xl font-semibold leading-tight text-white">Uma presença digital que trabalha por você.</p>
+              </div>
+              <div className="mt-8 rounded-3xl border border-violet-300/20 bg-gradient-to-br from-violet-300/[0.15] to-white/[0.03] p-6 sm:mt-16">
+                <Workflow className="size-6 text-violet-200" />
+                <p className="mt-16 text-xs font-semibold uppercase tracking-[0.16em] text-violet-100">Tecnologia sob medida</p>
+                <p className="mt-3 text-xl font-semibold leading-tight text-white">Processos mais simples, negócios mais fortes.</p>
+              </div>
+              <div className="rounded-3xl border border-emerald-300/20 bg-gradient-to-br from-emerald-300/[0.12] to-white/[0.03] p-6 sm:col-span-2">
+                <div className="flex items-center justify-between gap-4"><div><p className="text-xs font-semibold uppercase tracking-[0.16em] text-emerald-200">Do conceito à entrega</p><p className="mt-2 text-sm text-slate-300">Estratégia, design e código em um só time.</p></div><ShieldCheck className="size-7 shrink-0 text-emerald-200" /></div>
               </div>
             </div>
-            <div className="absolute -bottom-5 -left-5 flex items-center gap-3 rounded-2xl border border-white/15 bg-[#101720] px-4 py-3 shadow-xl"><span className="grid size-8 place-items-center rounded-full bg-emerald-300/15 text-emerald-300"><ShieldCheck className="size-4" /></span><span><span className="block text-[10px] uppercase tracking-wider text-slate-500">Tudo conectado</span><span className="block text-xs font-medium text-white">Uma fonte de verdade</span></span></div>
           </div>
         </section>
 
