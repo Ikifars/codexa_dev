@@ -330,7 +330,7 @@ export function ProjectWorkspace({ projectId, permissions }: { projectId: string
   }
 
   async function archiveProject() {
-    if (!canEditProject || !project || !window.confirm(`Arquivar o projeto “${project.name}”?`)) return
+    if (!canEditProject || !project || !window.confirm(`Arquivar o projeto ���${project.name}”?`)) return
     const { error: updateError } = await supabase.from('projects').update({ status: 'Arquivado' }).eq('id', project.id)
     if (updateError) {
       setError(updateError.message)
@@ -536,8 +536,7 @@ export function ProjectWorkspace({ projectId, permissions }: { projectId: string
                       const member = task.responsible_id ? memberById.get(task.responsible_id) : undefined
                       const overdue = Boolean(task.due_date && task.due_date < new Date().toISOString().slice(0, 10) && !isComplete(task.status) && !isCanceled(task.status))
                       return <article key={task.id} draggable={canUpdateTasks && column.status !== 'Cancelado'} onDragStart={(event) => { if (!canUpdateTasks) return; event.dataTransfer.setData('text/plain', task.id); event.dataTransfer.effectAllowed = 'move' }} className={`rounded-lg border border-white/[0.08] bg-[#171d28] p-3 transition-colors hover:border-blue-400/30 ${movingTaskId === task.id ? 'opacity-50' : ''}`}>
-                        <button onClick={() => openTask(task)} className="w-full text-left"><span className="flex items-start gap-2"><GripVertical className="mt-0.5 size-4 shrink-0 text-slate-600" /><span className="font-medium leading-5 text-slate-100">{task.title}</span></span></button>
-                        {task.description && <p className="mt-2 line-clamp-2 pl-6 text-xs leading-5 text-slate-400">{task.description}</p>}
+                        <button onClick={() => openTask(task)} className="w-full text-left"><span className="flex items-start gap-2"><GripVertical className="mt-0.5 size-4 shrink-0 text-slate-600" /><span className="line-clamp-2 min-w-0 font-medium leading-5 text-slate-100">{task.title}</span></span></button>
                         <div className="mt-3 flex flex-wrap items-center gap-1.5 pl-6">
                           <span className={`rounded border px-2 py-0.5 text-[11px] ${priorityTone(task.priority)}`}><Flag className="mr-1 inline size-3" />{task.priority}</span>
                           {task.due_date && <span className={`inline-flex items-center gap-1 rounded border px-2 py-0.5 text-[11px] ${overdue ? 'border-rose-400/20 bg-rose-400/10 text-rose-200' : 'border-white/[0.08] text-slate-400'}`}><CalendarDays className="size-3" />{dateLabel(task.due_date)}</span>}

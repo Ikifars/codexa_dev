@@ -34,6 +34,7 @@ export function ActivityHistoryWorkspace({ permissions, mode }: { permissions: s
   const [personalEvents, setPersonalEvents] = useState<PersonalEvent[]>([])
   const [auditEvents, setAuditEvents] = useState<AuditEvent[]>([])
   const [query, setQuery] = useState('')
+  const [moduleFilter, setModuleFilter] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const canReadPersonal = permissions.includes('*') || permissions.includes('projects:view')
@@ -85,16 +86,18 @@ export function ActivityHistoryWorkspace({ permissions, mode }: { permissions: s
 
   const normalizedQuery = query.trim().toLowerCase()
   const visiblePersonalEvents = personalEvents.filter((event) =>
-    `${event.summary} ${event.event_type} ${event.project_id} ${event.task_id ?? ''}`.toLowerCase().includes(normalizedQuery),
+    `${event.summary} ${event.event_type} ${event.project_id} ${event.task_id ?? ''}`.toLowerCase().includes(normalizedQuery)
+    && (!moduleFilter || event.event_type === moduleFilter),
   )
   const visibleAuditEvents = auditEvents.filter((event) =>
-    `${event.action_name} ${event.entity_type} ${event.entity_id ?? ''} ${event.actor_id ?? ''} ${event.result}`.toLowerCase().includes(normalizedQuery),
+    `${event.action_name} ${event.entity_type} ${event.entity_id ?? ''} ${event.actor_id ?? ''} ${event.result}`.toLowerCase().includes(normalizedQuery)
+    && (!moduleFilter || event.entity_type === moduleFilter),
   )
   const title = mode === 'personal' ? 'Meu histórico de atividades' : 'Auditoria administrativa'
 
   return <section className="space-y-5">
     <header><p className="mb-2 text-xs font-medium uppercase tracking-[0.16em] text-blue-400">{mode === 'personal' ? 'Conta' : 'Administração'}</p><h1 className="text-2xl font-semibold text-white">{title}</h1><p className="mt-1.5 text-sm text-slate-500">{mode === 'personal' ? 'Atividades de projeto registradas por você.' : 'Eventos administrativos registrados pelo workspace.'}</p></header>
-    <label className="flex items-center gap-2 rounded-lg border border-white/[0.07] bg-[#11161e] px-3 py-2.5"><Search className="size-4 text-slate-500" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar no histórico..." className="w-full bg-transparent text-sm text-white outline-none placeholder:text-slate-600" /></label>
+    <div className="flex flex-col gap-2 sm:flex-row"><label className="flex flex-1 items-center gap-2 rounded-lg border border-white/[0.07] bg-[#11161e] px-3 py-2.5"><Search className="size-4 text-slate-500" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar no histórico..." className="w-full bg-transparent text-sm text-white outline-none placeholder:text-slate-600" /></label><select aria-label="Filtrar módulo" value={moduleFilter} onChange={(event) => setModuleFilter(event.target.value)} className="rounded-lg border border-white/[0.07] bg-[#11161e] px-3 py-2.5 text-sm text-slate-300 outline-none"><option value="">Todos os módulos</option>{[...new Set((mode === 'personal' ? personalEvents.map((event) => event.event_type) : auditEvents.map((event) => event.entity_type)))].sort().map((item) => <option key={item} value={item}>{item}</option>)}</select></div>
     {error && <p role="alert" className="rounded-lg border border-rose-400/20 bg-rose-400/5 px-4 py-3 text-sm text-rose-200">{error}</p>}
     <div className="rounded-xl border border-white/[0.07] bg-[#11161e]">
       {loading ? <div className="flex min-h-40 items-center justify-center text-sm text-slate-500"><Loader2 className="mr-2 size-4 animate-spin" />Carregando histórico...</div>

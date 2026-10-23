@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react'
 import { Check, Copy, KeyRound, Loader2, Plus, Search, ShieldCheck, Trash2, X } from 'lucide-react'
 import { isModuleAvailable } from '@/lib/licensing/module-status'
+import { IntegrationHelp } from '@/components/integration-help'
 
 type Client = { id: string; name: string }
 type System = { id: string; name: string; client_id: string | null }
@@ -51,6 +52,7 @@ export function LicenseWorkspace({ permissions }: { permissions: string[] }) {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [deletingId, setDeletingId] = useState('')
+  const [expandedLicenseId, setExpandedLicenseId] = useState<string | null>(null)
   const [showForm, setShowForm] = useState(false)
   const [search, setSearch] = useState('')
   const [error, setError] = useState('')
@@ -198,7 +200,7 @@ export function LicenseWorkspace({ permissions }: { permissions: string[] }) {
       <div>
         <p className="mb-2 text-xs font-medium uppercase tracking-[0.16em] text-blue-400">Produtos e acesso</p>
         <h1 className="text-2xl font-semibold text-white">Licenças</h1>
-        <p className="mt-1.5 text-sm text-slate-500">Gerencie chaves, validade, contratação e liberação dos módulos por sistema.</p>
+        <div className="flex items-start gap-2"><p className="mt-1.5 text-sm text-slate-500">Gerencie chaves, validade, contratação e liberação dos módulos por sistema.</p><IntegrationHelp title="licenças" steps={['Selecione o cliente e o sistema que receberão a licença.', 'Defina a validade, se houver, e emita a licença.', 'Dentro da licença, marque primeiro os módulos contratados.', 'Depois marque Liberado apenas para módulos disponíveis ao cliente.', 'Altere status ou validade quando o acesso precisar ser suspenso ou renovado.']} /></div>
       </div>
       {canManage && <button onClick={() => { setShowForm((value) => !value); setError('') }} className="flex w-fit items-center gap-2 rounded-lg bg-blue-500 px-3.5 py-2.5 text-xs font-semibold text-white hover:bg-blue-400">
         {showForm ? <X className="size-4" /> : <Plus className="size-4" />}{showForm ? 'Fechar' : 'Nova licença'}
@@ -252,7 +254,7 @@ export function LicenseWorkspace({ permissions }: { permissions: string[] }) {
         const client = data.clients.find((item) => item.id === license.client_id)?.name ?? 'Cliente não encontrado'
         const system = data.systems.find((item) => item.id === license.system_id)?.name ?? 'Sistema não encontrado'
         return <article key={license.id} className="rounded-xl border border-white/[0.07] bg-[#11161e]">
-          <div className="grid gap-4 border-b border-white/[0.06] p-5 lg:grid-cols-[1fr_150px_190px_auto] lg:items-center">
+          <div className="grid gap-3 border-b border-white/[0.06] px-4 py-3 lg:grid-cols-[1fr_130px_165px_auto] lg:items-center">
             <div><p className="text-sm font-medium text-white">{client}</p><p className="mt-1 text-xs text-slate-500">{system}</p><p className="mt-2 text-[11px] text-slate-600">Criada em {new Date(license.created_at).toLocaleDateString('pt-BR')}</p></div>
             {canManage ? <label className="text-[11px] text-slate-500">Status
               <span className={`mt-1.5 block text-xs font-medium ${licenseStatusLabel(license) === 'Ativa' ? 'text-emerald-200' : 'text-amber-100'}`}>{licenseStatusLabel(license)}</span>
@@ -267,7 +269,8 @@ export function LicenseWorkspace({ permissions }: { permissions: string[] }) {
               {deletingId === license.id ? <Loader2 className="size-4 animate-spin" /> : <Trash2 className="size-4" />}<span className="lg:hidden">Excluir</span>
             </button>}
           </div>
-          <div className="p-5">
+          <div className="border-t border-white/[0.06] px-5 py-3"><button type="button" onClick={() => setExpandedLicenseId((current) => current === license.id ? null : license.id)} aria-expanded={expandedLicenseId === license.id} className="flex w-full items-center justify-between text-left text-xs font-medium text-blue-200"><span>{expandedLicenseId === license.id ? 'Ocultar detalhes avançados' : 'Ver detalhes avançados'}</span><span>{license.modules.filter((module) => module.is_enabled).length} módulos liberados</span></button></div>
+          {expandedLicenseId === license.id && <div className="p-5">
             <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
               <div><h2 className="text-xs font-semibold text-slate-200">Módulos contratados e liberados</h2><p className="mt-1 text-[11px] text-slate-600">A liberação só fica disponível após marcar o módulo como contratado.</p></div>
               <span className="text-[11px] text-slate-500">{license.modules.filter((module) => module.is_enabled).length} liberados</span>
@@ -279,7 +282,7 @@ export function LicenseWorkspace({ permissions }: { permissions: string[] }) {
                 <label className="flex items-center gap-1.5 text-[10px] text-slate-500"><input type="checkbox" checked={module.is_enabled} disabled={!canManage || !module.is_contracted || !isModuleAvailable(module.availability_status)} onChange={(event) => void updateModule(license.id, module, module.is_contracted, event.target.checked)} className="accent-emerald-500 disabled:opacity-40" />Liberado</label>
               </div>
             </div>)}</div> : <p className="rounded-lg border border-dashed border-white/[0.08] p-5 text-center text-xs text-slate-600">Nenhum módulo cadastrado para este sistema.</p>}
-          </div>
+          </div>}
         </article>
       })}</div> : <div className="rounded-xl border border-white/[0.07] bg-[#11161e] p-10 text-center"><Check className="mx-auto size-6 text-slate-600" /><p className="mt-3 text-sm text-slate-400">Nenhuma licença encontrada</p><p className="mt-1 text-xs text-slate-600">Emita uma licença para começar a controlar o acesso aos módulos.</p></div>}
   </section>

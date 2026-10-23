@@ -30,11 +30,6 @@ export async function requireContractAttachmentAccess(
   if (!contract) throw new AdminApiError('Contrato não encontrado.', 404)
 
   const roleName = normalizeWorkspaceRoleName(actor.roleName)
-  if (roleName === 'comercial'
-    && contract.responsible_id !== actor.actorId
-    && contract.responsible_id !== actor.memberId) {
-    throw new AdminApiError('Você não tem acesso a este contrato.', 403)
-  }
   if (roleName === 'relacionamento') {
     let clientId = contract.client_id
     if (!clientId && contract.proposal_id) {
