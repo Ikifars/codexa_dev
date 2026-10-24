@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { AdminApiError, requireWorkspacePermission } from '@/lib/supabase/admin-server'
 
-type LicenseUpdate = { status?: unknown; expiresAt?: unknown }
+type LicenseUpdate = { status?: unknown; expiresAt?: unknown; allowedDomain?: unknown }
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 const licenseStatuses = new Set(['active', 'suspended', 'revoked'])
@@ -36,6 +36,14 @@ export async function PATCH(request: Request, context: { params: Promise<{ licen
       if (Number.isNaN(expiration.getTime())) return NextResponse.json({ error: 'Data de expiração inválida.' }, { status: 400 })
       changes.expires_at = expiration.toISOString()
     } else return NextResponse.json({ error: 'Data de expiração inválida.' }, { status: 400 })
+  }
+  if (body.allowedDomain !== undefined) {
+    if (body.allowedDomain === null || body.allowedDomain === '') changes.allowed_domain = null
+    else if (typeof body.allowedDomain === 'string') {
+      const domain = body.allowedDomain.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/$/, '')
+      if (!domain || domain.includes('/') || domain.includes(':') || /\s/.test(domain)) return NextResponse.json({ error: 'Domínio autorizado inválido.' }, { status: 400 })
+      changes.allowed_domain = domain
+    } else return NextResponse.json({ error: 'Domínio autorizado inválido.' }, { status: 400 })
   }
   if (!Object.keys(changes).length) return NextResponse.json({ error: 'Nenhuma alteração informada.' }, { status: 400 })
 

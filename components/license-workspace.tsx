@@ -21,6 +21,7 @@ type License = {
   system_id: string
   status: string
   expires_at: string | null
+  allowed_domain: string | null
   created_at: string
   plan_id: string | null
   contract_id: string | null
@@ -108,6 +109,7 @@ export function LicenseWorkspace({ permissions }: { permissions: string[] }) {
             clientId: form.get('clientId'),
             systemId: form.get('systemId'),
             expiresAt: form.get('expiresAt') || null,
+            allowedDomain: form.get('allowedDomain') || null,
           }),
         },
       )
@@ -221,7 +223,7 @@ export function LicenseWorkspace({ permissions }: { permissions: string[] }) {
           <p className="text-sm font-medium text-blue-100">Chave de licença — exibida uma única vez</p>
           <code className="mt-2 block break-all rounded-lg bg-black/20 p-3 text-xs text-slate-200">{newLicenseKey}</code>
           <p className="mt-4 text-xs font-medium text-blue-100">Script para entregar ao cliente</p>
-          <code className="mt-2 block break-all rounded-lg bg-black/20 p-3 text-xs text-slate-300">{`<script src="${scriptOrigin}/api/client-script.js?token=${newLicenseKey}" defer></script>`}</code>
+          <code className="mt-2 block break-all rounded-lg bg-black/20 p-3 text-xs text-slate-300">{`<script src="${scriptOrigin}/client-script.js?token=${newLicenseKey}&api=${encodeURIComponent(`${scriptOrigin}/api/licenses/validate`)}" defer></script>`}</code>
           <button onClick={() => void copyKey()} className="mt-3 flex items-center gap-2 rounded-lg border border-white/10 px-3 py-2 text-xs text-slate-200 hover:bg-white/5"><Copy className="size-3.5" />Copiar chave</button>
         </div>
         <button onClick={() => setNewLicenseKey('')} aria-label="Ocultar chave" className="rounded p-1 text-slate-500 hover:text-white"><X className="size-4" /></button>
@@ -245,6 +247,10 @@ export function LicenseWorkspace({ permissions }: { permissions: string[] }) {
             <option value="">Selecione o sistema</option>{visibleSystems.map((system) => <option key={system.id} value={system.id}>{system.name}</option>)}
           </select>
         </label>
+        <label className="text-xs text-slate-500">Domínio autorizado (opcional)
+          <input name="allowedDomain" type="text" placeholder="cliente.com.br" className={`${inputClass} mt-2 w-full`} />
+          <span className="mt-1 block text-[11px] text-slate-600">Aceita o domínio e seus subdomínios. Não inclua protocolo ou caminho.</span>
+        </label>
         <label className="text-xs text-slate-500">Válida até (opcional)
           <input name="expiresAt" type="date" className={`${inputClass} mt-2 w-full`} />
         </label>
@@ -265,7 +271,7 @@ export function LicenseWorkspace({ permissions }: { permissions: string[] }) {
         const system = data.systems.find((item) => item.id === license.system_id)?.name ?? 'Sistema não encontrado'
         return <article key={license.id} className="rounded-xl border border-white/[0.07] bg-[#11161e]">
           <div className="grid gap-3 border-b border-white/[0.06] px-4 py-3 lg:grid-cols-[1fr_130px_165px_auto] lg:items-center">
-            <div><p className="text-sm font-medium text-white">{client}</p><p className="mt-1 text-xs text-slate-500">{system}</p><p className="mt-2 text-[11px] text-slate-600">Criada em {new Date(license.created_at).toLocaleDateString('pt-BR')}</p></div>
+            <div><p className="text-sm font-medium text-white">{client}</p><p className="mt-1 text-xs text-slate-500">{system}</p>{license.allowed_domain && <p className="mt-1 text-[11px] text-blue-300/70">Domínio: {license.allowed_domain}</p>}<p className="mt-2 text-[11px] text-slate-600">Criada em {new Date(license.created_at).toLocaleDateString('pt-BR')}</p></div>
             {canManage ? <label className="text-[11px] text-slate-500">Status
               <span className={`mt-1.5 block text-xs font-medium ${licenseStatusLabel(license) === 'Ativa' ? 'text-emerald-200' : 'text-amber-100'}`}>{licenseStatusLabel(license)}</span>
               <select value={license.status} onChange={(event) => void updateLicense(license.id, { status: event.target.value })} className={`${inputClass} mt-1.5 w-full text-xs`}>

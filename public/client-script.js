@@ -10,6 +10,8 @@
 
   const apiUrl = source.searchParams.get('api') || `${source.origin}/api/licenses/validate`
   const suspendedMessage = 'Este sistema está temporariamente suspenso. Entre em contato com o suporte.'
+  let lastState = ''
+  let validating = false
 
   function showSuspended() {
     if (document.getElementById('codexa-license-suspended')) return
@@ -38,8 +40,13 @@
     })
   }
 
+  function currentOriginIsAllowed() {
+    return window.location.protocol === 'http:' || window.location.protocol === 'https:'
+  }
+
   async function validate() {
     try {
+      if (!currentOriginIsAllowed()) return
       const response = await fetch(apiUrl, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },

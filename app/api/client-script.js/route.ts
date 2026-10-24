@@ -86,7 +86,7 @@ export async function GET() {
   return new Response(clientScript, {
     headers: {
       'Content-Type': 'application/javascript; charset=utf-8',
-      'Cache-Control': 'no-store, max-age=0',
+      'Cache-Control': 'public, max-age=3600, immutable',
       'Access-Control-Allow-Origin': '*',
     },
   })
