@@ -22,6 +22,7 @@ type Member = {
   status: string
   created_at: string
 }
+type Override = { module_name: string; action_name: string; effect: 'inherit' | 'allow' | 'deny' }
 
 const moduleGroups: Record<string, string> = {
   dashboard: 'Painel',
@@ -115,6 +116,8 @@ export function RoleManagementWorkspace({ initialView = 'roles' }: { initialView
   const [roleGrants, setRoleGrants] = useState<string[]>([])
   const [deletingRole, setDeletingRole] = useState<Role | null>(null)
   const [reassignRoleId, setReassignRoleId] = useState('')
+  const [permissionOverrides, setPermissionOverrides] = useState<Record<string, Override[]>>({})
+  const [expandedMember, setExpandedMember] = useState<string | null>(null)
 
   async function load() {
     setLoading(true)
@@ -280,6 +283,21 @@ export function RoleManagementWorkspace({ initialView = 'roles' }: { initialView
     }
   }
 
+  async function loadMemberOverrides(memberId: string) {
+    try {
+      const result = await api<{ overrides: Array<{ effect: Override['effect']; access_permissions: { module_name: string; action_name: string } | { module_name: string; action_name: string }[] }> }>(`/api/admin/rbac/users/${memberId}/permissions`)
+      setPermissionOverrides((current) => ({ ...current, [memberId]: result.overrides.map((item) => { const permission = Array.isArray(item.access_permissions) ? item.access_permissions[0] : item.access_permissions; return { module_name: permission.module_name, action_name: permission.action_name, effect: item.effect } }) }))
+    } catch (loadError) { setError(loadError instanceof Error ? loadError.message : 'Não foi possível carregar as exceções.') }
+  }
+
+  async function updateMemberOverride(memberId: string, module: string, action: string, effect: Override['effect']) {
+    try {
+      await api(`/api/admin/rbac/users/${memberId}/permissions`, { method: 'PATCH', body: JSON.stringify({ module, action, effect }) })
+      await loadMemberOverrides(memberId)
+      setNotice(effect === 'inherit' ? 'Permissão restaurada ao cargo.' : 'Exceção individual salva.')
+    } catch (saveError) { setError(saveError instanceof Error ? saveError.message : 'Não foi possível salvar a exceção.') }
+  }
+
   async function updateMember(member: Member, patch: { roleName?: string; status?: string }) {
     setError('')
     setNotice('')
@@ -427,9 +445,9 @@ export function RoleManagementWorkspace({ initialView = 'roles' }: { initialView
               return <tr key={member.id}>
                 <td className="px-4 py-3"><p className="text-xs font-medium text-slate-200">{member.full_name}{self ? ' (você)' : ''}</p><p className="mt-1 text-[11px] text-slate-500">{member.email}</p></td>
                 <td className="px-4 py-3"><select aria-label={`Cargo de ${member.full_name}`} disabled={self} value={member.role_name} onChange={(event) => void updateMember(member, { roleName: event.target.value })} className="rounded-lg border border-white/[0.08] bg-[#0d1118] px-2 py-2 text-xs text-slate-200 disabled:opacity-50">{roles.filter((item) => item.is_active).map((item) => <option key={item.id} value={item.name}>{item.name}</option>)}</select></td>
-                <td className="px-4 py-3"><select aria-label={`Status de ${member.full_name}`} disabled={self} value={member.status.replace(/['"]/g, '').trim().toLowerCase() === 'ativo' || member.status.toLowerCase() === 'active' ? 'Ativo' : 'Inativo'} onChange={(event) => void updateMember(member, { status: event.target.value })} className="rounded-lg border border-white/[0.08] bg-[#0d1118] px-2 py-2 text-xs text-slate-200 disabled:opacity-50"><option value="Ativo">Ativo</option><option value="Inativo">Inativo</option></select></td>
+                <td className="px-4 py-3"><select aria-label={`Status de ${member.full_name}`} disabled={self} value={member.status.replace(/[\'"]/g, '').trim().toLowerCase() === 'ativo' || member.status.toLowerCase() === 'active' ? 'Ativo' : 'Inativo'} onChange={(event) => void updateMember(member, { status: event.target.value })} className="rounded-lg border border-white/[0.08] bg-[#0d1118] px-2 py-2 text-xs text-slate-200 disabled:opacity-50"><option value="Ativo">Ativo</option><option value="Inativo">Inativo</option></select></td>
                 <td className="px-4 py-3 text-xs text-slate-500">{new Date(member.created_at).toLocaleDateString('pt-BR')}</td>
-                <td className="px-4 py-3"><div className="flex gap-1.5"><button type="button" onClick={() => setMemberDetails(member)} className="inline-flex items-center gap-1.5 rounded-lg border border-white/[0.08] px-2.5 py-2 text-xs text-slate-300 hover:bg-white/[0.04]"><Eye className="size-3.5" />Detalhes</button><button type="button" disabled={self} onClick={() => { setEditingMember(member); setMemberDetails(null) }} className="inline-flex items-center gap-1.5 rounded-lg border border-white/[0.08] px-2.5 py-2 text-xs text-slate-300 hover:bg-white/[0.04] disabled:cursor-not-allowed disabled:opacity-40"><Pencil className="size-3.5" />Editar</button></div></td>
+                <td className="px-4 py-3"><div className="flex gap-1.5"><button type="button" onClick={() => { setMemberDetails(member); setExpandedMember(member.id); void loadMemberOverrides(member.id) }} className="inline-flex items-center gap-1.5 rounded-lg border border-white/[0.08] px-2.5 py-2 text-xs text-slate-300 hover:bg-white/[0.04]"><Eye className="size-3.5" />Detalhes</button><button type="button" disabled={self} onClick={() => { setEditingMember(member); setMemberDetails(null) }} className="inline-flex items-center gap-1.5 rounded-lg border border-white/[0.08] px-2.5 py-2 text-xs text-slate-300 hover:bg-white/[0.04] disabled:cursor-not-allowed disabled:opacity-40"><Pencil className="size-3.5" />Editar</button></div></td>
               </tr>
             })}</tbody>
           </table>
@@ -446,6 +464,7 @@ export function RoleManagementWorkspace({ initialView = 'roles' }: { initialView
             <div><dt className="text-xs text-slate-500">Status</dt><dd className="mt-1 text-slate-200">{memberDetails.status}</dd></div>
             <div><dt className="text-xs text-slate-500">Criado em</dt><dd className="mt-1 text-slate-200">{new Date(memberDetails.created_at).toLocaleDateString('pt-BR')}</dd></div>
           </dl>
+          {expandedMember === memberDetails.id && <div className="mt-6 border-t border-white/[0.06] pt-4"><p className="text-xs font-semibold text-slate-300">Exceções individuais</p><p className="mt-1 text-[11px] text-slate-500">Herdar remove a exceção e mantém a permissão do cargo.</p><div className="mt-3 max-h-64 space-y-2 overflow-y-auto">{permissions.map((permission) => { const key = `${permission.module_name}:${permission.action_name}`; const override = permissionOverrides[memberDetails.id]?.find((item) => item.module_name === permission.module_name && item.action_name === permission.action_name); return <label key={permission.id} className="flex items-center justify-between gap-3 rounded-lg border border-white/[0.06] px-3 py-2 text-xs text-slate-300"><span>{moduleLabels[permission.module_name] ?? permission.module_name} · {actionLabels[permission.action_name] ?? permission.action_name}</span><select value={override?.effect ?? 'inherit'} onChange={(event) => void updateMemberOverride(memberDetails.id, permission.module_name, permission.action_name, event.target.value as Override['effect'])} className="rounded border border-white/[0.08] bg-[#0d1118] px-2 py-1.5 text-[11px] text-slate-200"><option value="inherit">Herdar</option><option value="allow">Permitir</option><option value="deny">Negar</option></select></label> })}</div></div>}
           <div className="mt-6 flex justify-end gap-2"><button type="button" onClick={() => setMemberDetails(null)} className="rounded-lg px-3 py-2 text-xs text-slate-300">Fechar</button><button type="button" disabled={memberDetails.user_id === currentUserId} onClick={() => { setEditingMember(memberDetails); setMemberDetails(null) }} className="inline-flex items-center gap-1.5 rounded-lg bg-blue-500 px-3 py-2 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40"><Pencil className="size-3.5" />Editar</button></div>
         </section>
       </div>}
