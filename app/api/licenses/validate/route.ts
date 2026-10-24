@@ -41,7 +41,7 @@ function normalizedHostname(value: string | null) {
     const candidate = value.includes('://') ? value : `https://${value}`
     const url = new URL(candidate)
     if (url.username || url.password || url.pathname !== '/' && url.pathname !== '') return null
-    return url.hostname.toLowerCase().replace(/\\.$/, '')
+    return url.hostname.toLowerCase().replace(/\.$/, '')
   } catch { return null }
 }
 
@@ -92,7 +92,7 @@ export async function POST(request: Request) {
   }
   if (!license) return json({ valid: false, reason: 'invalid_key', expiresAt: null, modules: [] }, 401, origin)
 
-  if (license.allowed_domain && !domainAllowed(license.allowed_domain, origin)) {
+  if (license.allowed_domain && origin && !domainAllowed(license.allowed_domain, origin)) {
     return json({ valid: false, reason: 'domain_not_allowed', expiresAt: license.expires_at, modules: [] }, 403, origin)
   }
 
@@ -135,6 +135,7 @@ export async function POST(request: Request) {
         enabled,
         available,
         licensed: contracted && enabled && available,
+        actions: [],
       }
     }),
   }, 200, origin)

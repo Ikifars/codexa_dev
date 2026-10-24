@@ -31,8 +31,9 @@
       if (module && !module.licensed) element.remove()
     })
     document.querySelectorAll('[data-license-action]').forEach((element) => {
-      const module = byCode.get(element.getAttribute('data-license-action'))
-      if (module && !module.licensed) {
+      const module = byCode.get(element.getAttribute('data-license-module'))
+      const allowed = module?.licensed
+      if (module && !allowed) {
         element.setAttribute('aria-disabled', 'true')
         element.setAttribute('title', 'Este recurso não está disponível na sua licença.')
         element.addEventListener('click', (event) => event.preventDefault(), { capture: true })

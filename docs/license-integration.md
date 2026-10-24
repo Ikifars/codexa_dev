@@ -18,12 +18,44 @@ A chave deve ficar no parâmetro `token`. Não a coloque em logs ou repositório
 
 Na licença, marque o módulo como contratado e depois habilite-o. O script remove elementos com `data-license-module="codigo-do-modulo"` quando o módulo não estiver liberado.
 
-Para ações que devem permanecer visíveis, mas bloqueadas, use `data-license-action="codigo-do-modulo"`.
+`data-license-action` é metadado semântico para identificar a operação (`read`, `create`, `update` ou `delete`). O script visual aplica a decisão no nível do módulo; a autorização da ação deve ser feita no backend com o SDK server-side.
 
 ## 4. Validar no sistema cliente
 
 A validação envia `POST` para `/api/licenses/validate` com `Authorization: Bearer SUA_CHAVE`. A resposta informa `valid` e a lista de módulos. O domínio de origem é verificado no servidor.
 
-## 5. Suspensão e atualização
+## 5. Proteger o backend
 
-A licença é revalidada a cada carregamento. Ao suspender, expirar ou bloquear a licença, o sistema cliente mostra a mensagem de suspensão e deixa de expor os módulos não liberados.
+Instale o arquivo `lib/licensing/server.ts` no sistema cliente ou publique-o como pacote interno. Configure somente no servidor:
+
+```env
+CODEXA_LICENSE_API_URL=https://SEU-PAINEL/api/licenses/validate
+CODEXA_LICENSE_KEY=chave-da-licenca
+CODEXA_LICENSE_TIMEOUT_MS=5000
+CODEXA_LICENSE_CACHE_TTL_SECONDS=120
+```
+
+Em cada Route Handler ou Server Action protegido:
+
+```ts
+import { requireLicensedModule, LicenseAuthorizationError } from '@/lib/licensing/server'
+
+export async function POST(request: Request) {
+  try {
+    await requireLicensedModule({ module: 'financeiro', action: 'create', request })
+    // validar usuário/RBAC e entrada antes de gravar dados
+    return Response.json({ ok: true })
+  } catch (error) {
+    if (error instanceof LicenseAuthorizationError) {
+      return Response.json({ error: error.reason }, { status: error.status })
+    }
+    throw error
+  }
+}
+```
+
+A chave `CODEXA_LICENSE_KEY` nunca deve ser exposta ao navegador. A licença não substitui autenticação, RBAC ou RLS. Se o cliente usa Supabase diretamente pelo browser, mova operações sensíveis para o servidor e mantenha RLS ativo.
+
+## 6. Suspensão e atualização
+
+A licença é revalidada a cada carregamento no script. No SDK server-side, respostas positivas ficam em cache apenas pelo TTL configurado, limitado a 5 minutos; respostas inválidas nunca são armazenadas positivamente. Uma suspensão pode levar até o TTL para bloquear um cliente que já possui cache positivo. O domínio exato e seus subdomínios são aceitos; `cliente.com.br.evil.com` não é aceito. Requisições server-to-server sem `Origin` continuam permitidas e devem ser protegidas pela chave privada.

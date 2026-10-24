@@ -5,6 +5,10 @@ alter table public.licenses
 
 comment on column public.licenses.allowed_domain is 'Hostname autorizado para validar a licença; permite o domínio exato e seus subdomínios.';
 
+update public.licenses
+set allowed_domain = lower(trim(regexp_replace(regexp_replace(allowed_domain, '^https?://', ''), '/$', '')))
+where allowed_domain is not null;
+
 create index if not exists licenses_allowed_domain_idx
   on public.licenses (allowed_domain)
   where allowed_domain is not null;
