@@ -119,6 +119,7 @@ export function RoleManagementWorkspace({ initialView = 'roles' }: { initialView
   const [permissionOverrides, setPermissionOverrides] = useState<Record<string, Override[]>>({})
   const [expandedMember, setExpandedMember] = useState<string | null>(null)
   const [expandedPermissionGroups, setExpandedPermissionGroups] = useState<string[]>([])
+  const [expandedRolePermissionGroups, setExpandedRolePermissionGroups] = useState<string[]>([])
 
   async function load() {
     setLoading(true)
@@ -151,6 +152,15 @@ export function RoleManagementWorkspace({ initialView = 'roles' }: { initialView
   }, [initialView])
 
   const role = roles.find((item) => item.id === selectedRole)
+  const uniqueMembers = useMemo(() => {
+    const seen = new Set<string>()
+    return members.filter((member) => {
+      const key = member.user_id ?? member.email.trim().toLowerCase()
+      if (seen.has(key)) return false
+      seen.add(key)
+      return true
+    })
+  }, [members])
   useEffect(() => {
     if (!role) return
     setRoleName(role.name)
@@ -404,10 +414,12 @@ export function RoleManagementWorkspace({ initialView = 'roles' }: { initialView
               {Object.entries(groupedPermissions).map(([group, entries]) => {
                 const modulePermissions = new Map<string, Permission[]>()
                 for (const permission of entries) modulePermissions.set(permission.module_name, [...(modulePermissions.get(permission.module_name) ?? []), permission])
-                return <section key={group} className="rounded-lg border border-white/[0.06]">
-                  <div className="flex items-center justify-between gap-3 border-b border-white/[0.06] px-4 py-2.5"><h3 className="text-xs font-semibold uppercase tracking-wide text-blue-300">{group}</h3><button type="button" disabled={roleName.toLowerCase() === 'admin'} onClick={() => toggleModulePermissions(group, entries)} className="rounded-md border border-blue-400/20 px-2 py-1 text-[10px] font-medium text-blue-200 hover:bg-blue-400/10 disabled:cursor-not-allowed disabled:opacity-50">Liberar setor</button></div>
-                  <div className="divide-y divide-white/[0.04]">{[...modulePermissions].map(([module, actions]) => { const moduleKeys = actions.map((permission) => `${permission.module_name}:${permission.action_name}`); const selectedCount = moduleKeys.filter((key) => roleName.toLowerCase() === 'admin' || roleGrants.includes(key)).length; return <div key={module} className="grid gap-3 px-4 py-3 md:grid-cols-[190px_1fr]">
-                    <div><p className="text-xs font-medium text-slate-300">{moduleLabels[module] ?? module}</p><p className="mt-1 text-[10px] text-slate-600">{selectedCount}/{actions.length} liberadas</p></div>
+                const isOpen = expandedRolePermissionGroups.includes(group)
+                const selectedCount = entries.filter((permission) => roleName.toLowerCase() === 'admin' || roleGrants.includes(`${permission.module_name}:${permission.action_name}`)).length
+                return <section key={group} className="overflow-hidden rounded-lg border border-white/[0.06]">
+                  <div className="flex items-center justify-between gap-3 px-4 py-2.5"><button type="button" aria-expanded={isOpen} onClick={() => setExpandedRolePermissionGroups((current) => isOpen ? current.filter((item) => item !== group) : [...current, group])} className="flex min-w-0 items-center gap-2 text-left"><ChevronDown className={`size-4 shrink-0 text-blue-300 transition-transform ${isOpen ? 'rotate-180' : ''}`} /><span className="text-xs font-semibold uppercase tracking-wide text-blue-300">{group}</span><span className="text-[10px] text-slate-600">{selectedCount}/{entries.length}</span></button><button type="button" disabled={roleName.toLowerCase() === 'admin'} onClick={() => toggleModulePermissions(group, entries)} className="rounded-md border border-blue-400/20 px-2 py-1 text-[10px] font-medium text-blue-200 hover:bg-blue-400/10 disabled:cursor-not-allowed disabled:opacity-50">Liberar setor</button></div>
+                  {isOpen && <div className="divide-y divide-white/[0.04] border-t border-white/[0.06]">{[...modulePermissions].map(([module, actions]) => { const moduleKeys = actions.map((permission) => `${permission.module_name}:${permission.action_name}`); const moduleSelectedCount = moduleKeys.filter((key) => roleName.toLowerCase() === 'admin' || roleGrants.includes(key)).length; return <div key={module} className="grid gap-3 px-4 py-3 md:grid-cols-[190px_1fr]">
+                    <div><p className="text-xs font-medium text-slate-300">{moduleLabels[module] ?? module}</p><p className="mt-1 text-[10px] text-slate-600">{moduleSelectedCount}/{actions.length} liberadas</p></div>
                     <div className="grid gap-2 sm:grid-cols-2">{actions.map((permission) => {
                       const key = `${permission.module_name}:${permission.action_name}`
                       const checked = roleName.toLowerCase() === 'admin' || roleGrants.includes(key)
@@ -417,7 +429,7 @@ export function RoleManagementWorkspace({ initialView = 'roles' }: { initialView
                         <PermissionSwitch checked={checked} disabled={roleName.toLowerCase() === 'admin'} label={`${checked ? 'Bloquear' : 'Liberar'} ${actionLabel} em ${moduleLabels[module] ?? module}`} onChange={(value) => togglePermission(permission, value)} />
                       </div>
                     })}</div>
-                  </div>})}</div>
+                  </div>})}</div>}
                 </section>
               })}
             </div>
@@ -441,7 +453,7 @@ export function RoleManagementWorkspace({ initialView = 'roles' }: { initialView
         <div className="overflow-x-auto rounded-xl border border-white/[0.07] bg-[#11161e]">
           <table className="w-full min-w-[820px] text-left text-sm">
             <thead className="border-b border-white/[0.07] text-[11px] uppercase tracking-wide text-slate-500"><tr><th className="px-4 py-3">Membro</th><th className="px-4 py-3">Cargo</th><th className="px-4 py-3">Status</th><th className="px-4 py-3">Criado em</th><th className="px-4 py-3">Ações</th></tr></thead>
-            <tbody className="divide-y divide-white/[0.04]">{members.map((member) => {
+            <tbody className="divide-y divide-white/[0.04]">{uniqueMembers.map((member) => {
               const self = member.user_id === currentUserId
               return <tr key={member.id}>
                 <td className="px-4 py-3"><p className="text-xs font-medium text-slate-200">{member.full_name}{self ? ' (você)' : ''}</p><p className="mt-1 text-[11px] text-slate-500">{member.email}</p></td>
