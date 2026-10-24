@@ -60,6 +60,7 @@ export function LicenseWorkspace({ permissions }: { permissions: string[] }) {
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
   const [newLicenseKey, setNewLicenseKey] = useState('')
+  const [integrationToken, setIntegrationToken] = useState('')
   const [selectedClient, setSelectedClient] = useState('')
   const [selectedSystem, setSelectedSystem] = useState('')
   const [scriptOrigin, setScriptOrigin] = useState(defaultLicenseSiteUrl)
@@ -114,7 +115,9 @@ export function LicenseWorkspace({ permissions }: { permissions: string[] }) {
         },
       )
       setNewLicenseKey(result.licenseKey)
-      setNotice(result.warning || 'Licença criada. Copie e guarde a chave: ela não será exibida novamente.')
+      const integration = await requestJson<{ integrationToken: string }>(`/api/admin/licenses/${result.license.id}/integration`, { method: 'POST' })
+      setIntegrationToken(integration.integrationToken)
+      setNotice(result.warning || 'Licença e integração preparadas. Guarde os dois segredos: eles não serão exibidos novamente.')
       setShowForm(false)
       await load()
     } catch (saveError) {
@@ -222,7 +225,8 @@ export function LicenseWorkspace({ permissions }: { permissions: string[] }) {
         <div className="min-w-0 flex-1">
           <p className="text-sm font-medium text-blue-100">Chave de licença — exibida uma única vez</p>
           <code className="mt-2 block break-all rounded-lg bg-black/20 p-3 text-xs text-slate-200">{newLicenseKey}</code>
-          <p className="mt-4 text-xs font-medium text-blue-100">Script para entregar ao cliente</p>
+          {integrationToken && <><p className="mt-4 text-xs font-medium text-blue-100">Token server-to-server — exibido uma única vez</p><code className="mt-2 block break-all rounded-lg bg-black/20 p-3 text-xs text-amber-200">{integrationToken}</code><p className="mt-1 text-[11px] text-slate-500">Configure como CODEXA_LICENSE_KEY apenas no servidor do cliente. Nunca coloque este token no navegador.</p></>}
+          <p className="mt-4 text-xs font-medium text-blue-100">Script visual opcional para entregar ao cliente</p>
           <code className="mt-2 block break-all rounded-lg bg-black/20 p-3 text-xs text-slate-300">{`<script src="${scriptOrigin}/client-script.js?token=${newLicenseKey}&api=${encodeURIComponent(`${scriptOrigin}/api/licenses/validate`)}" defer></script>`}</code>
           <button onClick={() => void copyKey()} className="mt-3 flex items-center gap-2 rounded-lg border border-white/10 px-3 py-2 text-xs text-slate-200 hover:bg-white/5"><Copy className="size-3.5" />Copiar chave</button>
         </div>

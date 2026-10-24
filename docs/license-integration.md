@@ -56,6 +56,21 @@ export async function POST(request: Request) {
 
 A chave `CODEXA_LICENSE_KEY` nunca deve ser exposta ao navegador. A licença não substitui autenticação, RBAC ou RLS. Se o cliente usa Supabase diretamente pelo browser, mova operações sensíveis para o servidor e mantenha RLS ativo.
 
-## 6. Suspensão e atualização
+## 6. Preparar uma instalação exclusiva
+
+Ao criar a licença, o painel chama `POST /api/admin/licenses/:licenseId/integration` e prepara uma instalação `nextjs-supabase`. A resposta administrativa contém, uma única vez:
+
+- `installationId`: identificador público estável da instalação;
+- `integrationToken`: credencial privada server-to-server, armazenada somente como hash;
+- `manifest`: configuração não secreta e versão do SDK;
+- `status`: começa em `awaiting_installation` e só muda para `connected` depois de uma validação real.
+
+Configure o token no ambiente privado do cliente. Para gerar/rotacionar novamente, use a mesma operação; o token anterior deixa de ser utilizável quando a integração for revogada. O painel não deve enviar esse token por URL pública, JavaScript ou repositório.
+
+## 7. Diagnóstico e limites
+
+O endpoint `GET /api/admin/licenses/:licenseId/integration` informa o último estado observado pela Codexa. Ele não consegue verificar arquivos, variáveis ou RLS de um repositório que não foi conectado. Portanto, “conectada” significa apenas que uma chamada real server-to-server foi validada; a cobertura das rotas protegidas continua sendo responsabilidade do projeto cliente.
+
+## 8. Suspensão e atualização
 
 A licença é revalidada a cada carregamento no script. No SDK server-side, respostas positivas ficam em cache apenas pelo TTL configurado, limitado a 5 minutos; respostas inválidas nunca são armazenadas positivamente. Uma suspensão pode levar até o TTL para bloquear um cliente que já possui cache positivo. O domínio exato e seus subdomínios são aceitos; `cliente.com.br.evil.com` não é aceito. Requisições server-to-server sem `Origin` continuam permitidas e devem ser protegidas pela chave privada.

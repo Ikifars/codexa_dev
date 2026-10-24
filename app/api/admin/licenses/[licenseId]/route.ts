@@ -56,7 +56,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ licen
       .from('licenses')
       .update(changes)
       .eq('id', licenseId)
-      .select('id,status,expires_at')
+      .select('id,status,expires_at,allowed_domain')
       .maybeSingle()
     if (updateError) return responseError(updateError)
     if (!license) return NextResponse.json({ error: 'Licença não encontrada.' }, { status: 404 })

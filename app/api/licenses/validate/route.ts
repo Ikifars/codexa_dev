@@ -80,12 +80,24 @@ export async function POST(request: Request) {
   }
   if (!withinLimit) return json({ error: 'Limite de validações excedido.' }, 429, origin)
 
-  const keyHash = createHash('sha256').update(match[1]).digest('hex')
-  const { data: license, error: licenseError } = await supabase
+  const presentedToken = match[1]
+  const keyHash = createHash('sha256').update(presentedToken).digest('hex')
+  let { data: license, error: licenseError } = await supabase
     .from('licenses')
     .select('id,system_id,status,is_active,expires_at,allowed_domain')
     .eq('license_key_hash', keyHash)
     .maybeSingle()
+  if (!license && presentedToken.startsWith('cxi_')) {
+    const integration = await supabase.from('license_integrations').select('license_id,status').eq('token_hash', keyHash).maybeSingle()
+    if (integration.error) licenseError = integration.error
+    if (integration.data?.status === 'revoked') return json({ valid: false, reason: 'integration_revoked', expiresAt: null, modules: [] }, 403, origin)
+    if (integration.data?.license_id) {
+      const integrationLicense = await supabase.from('licenses').select('id,system_id,status,is_active,expires_at,allowed_domain').eq('id', integration.data.license_id).maybeSingle()
+      license = integrationLicense.data
+      licenseError = integrationLicense.error
+      if (license) await supabase.from('license_integrations').update({ status: 'connected', last_validation_at: new Date().toISOString(), last_validation_status: 'success', last_error: null, updated_at: new Date().toISOString() }).eq('license_id', license.id)
+    }
+  }
   if (licenseError) {
     console.error('License validation lookup failed:', licenseError.message)
     return json({ error: 'Serviço de validação indisponível.' }, 503, origin)

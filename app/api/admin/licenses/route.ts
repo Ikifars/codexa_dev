@@ -99,7 +99,7 @@ export async function POST(request: Request) {
   const expiresAt = expirationDate(body.expiresAt)
   if (expiresAt === undefined) return NextResponse.json({ error: 'Data de expiração inválida.' }, { status: 400 })
   const allowedDomain = typeof body.allowedDomain === 'string' && body.allowedDomain.trim() ? body.allowedDomain.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/$/, '') : null
-  if (allowedDomain && (allowedDomain.includes('/') || allowedDomain.includes(':') || /\\s/.test(allowedDomain))) return NextResponse.json({ error: 'Domínio autorizado inválido.' }, { status: 400 })
+  if (allowedDomain && (allowedDomain.includes('/') || allowedDomain.includes(':') || /\s/.test(allowedDomain))) return NextResponse.json({ error: 'Domínio autorizado inválido.' }, { status: 400 })
 
   try {
     const { actorId, supabase } = await requireWorkspacePermission('licenses', 'manage_licenses')
