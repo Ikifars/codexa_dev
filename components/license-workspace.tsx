@@ -28,6 +28,7 @@ type License = {
   modules: Module[]
 }
 type LicenseData = { clients: Client[]; systems: System[]; licenses: License[] }
+type RouteMapping = { id: string; module_id: string; route_pattern: string; blocked_path: string }
 
 const inputClass = 'field rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-2.5 text-sm text-slate-200 outline-none placeholder:text-slate-600 focus:border-blue-400/60'
 const statusNames: Record<string, string> = { active: 'Ativa', suspended: 'Suspensa', revoked: 'Revogada' }
@@ -64,6 +65,9 @@ export function LicenseWorkspace({ permissions }: { permissions: string[] }) {
   const [selectedClient, setSelectedClient] = useState('')
   const [selectedSystem, setSelectedSystem] = useState('')
   const [scriptOrigin, setScriptOrigin] = useState(defaultLicenseSiteUrl)
+  const [routesByLicense, setRoutesByLicense] = useState<Record<string, RouteMapping[]>>({})
+  const [middlewareByLicense, setMiddlewareByLicense] = useState<Record<string, string>>({})
+  const [routeForm, setRouteForm] = useState({ licenseId: '', moduleId: '', pattern: '', blockedPath: '/acesso-bloqueado' })
 
   async function load() {
     setLoading(true)
@@ -174,6 +178,30 @@ export function LicenseWorkspace({ permissions }: { permissions: string[] }) {
     } catch (updateError) {
       setError(updateError instanceof Error ? updateError.message : 'Não foi possível atualizar o módulo.')
     }
+  }
+
+  async function loadRoutes(licenseId: string) {
+    try {
+      const result = await requestJson<{ routes: RouteMapping[] }>(`/api/admin/licenses/${licenseId}/routes`)
+      setRoutesByLicense((current) => ({ ...current, [licenseId]: result.routes }))
+    } catch (loadError) { setError(loadError instanceof Error ? loadError.message : 'Não foi possível carregar as rotas.') }
+  }
+
+  async function addRoute(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    try {
+      const result = await requestJson<{ route: RouteMapping }>(`/api/admin/licenses/${routeForm.licenseId}/routes`, { method: 'POST', body: JSON.stringify({ moduleId: routeForm.moduleId, routePattern: routeForm.pattern, blockedPath: routeForm.blockedPath }) })
+      setRoutesByLicense((current) => ({ ...current, [routeForm.licenseId]: [...(current[routeForm.licenseId] ?? []), result.route] }))
+      setRouteForm((current) => ({ ...current, pattern: '' }))
+      setNotice('Rota protegida adicionada.')
+    } catch (routeError) { setError(routeError instanceof Error ? routeError.message : 'Não foi possível adicionar a rota.') }
+  }
+
+  async function generateMiddleware(licenseId: string) {
+    try {
+      const result = await requestJson<{ source: string }>(`/api/admin/licenses/${licenseId}/middleware`)
+      setMiddlewareByLicense((current) => ({ ...current, [licenseId]: result.source }))
+    } catch (generateError) { setError(generateError instanceof Error ? generateError.message : 'Não foi possível gerar o middleware.') }
   }
 
   async function deleteLicense(license: License) {
@@ -289,7 +317,7 @@ export function LicenseWorkspace({ permissions }: { permissions: string[] }) {
               {deletingId === license.id ? <Loader2 className="size-4 animate-spin" /> : <Trash2 className="size-4" />}<span className="lg:hidden">Excluir</span>
             </button>}
           </div>
-          <div className="border-t border-white/[0.06] px-5 py-3"><button type="button" onClick={() => setExpandedLicenseId((current) => current === license.id ? null : license.id)} aria-expanded={expandedLicenseId === license.id} className="flex w-full items-center justify-between text-left text-xs font-medium text-blue-200"><span>{expandedLicenseId === license.id ? 'Ocultar detalhes avançados' : 'Ver detalhes avançados'}</span><span>{license.modules.filter((module) => module.is_enabled).length} módulos liberados</span></button></div>
+          <div className="border-t border-white/[0.06] px-5 py-3"><button type="button" onClick={() => { const next = expandedLicenseId === license.id ? null : license.id; setExpandedLicenseId(next); if (next) { setRouteForm((current) => ({ ...current, licenseId: license.id, moduleId: license.modules[0]?.id ?? '' })); void loadRoutes(license.id) } }} aria-expanded={expandedLicenseId === license.id} className="flex w-full items-center justify-between text-left text-xs font-medium text-blue-200"><span>{expandedLicenseId === license.id ? 'Ocultar detalhes avançados' : 'Ver detalhes avançados'}</span><span>{license.modules.filter((module) => module.is_enabled).length} módulos liberados</span></button></div>
           {expandedLicenseId === license.id && <div className="p-5">
             <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
               <div><h2 className="text-xs font-semibold text-slate-200">Módulos contratados e liberados</h2><p className="mt-1 text-[11px] text-slate-600">A liberação só fica disponível após marcar o módulo como contratado.</p></div>
@@ -302,6 +330,10 @@ export function LicenseWorkspace({ permissions }: { permissions: string[] }) {
                 <label className="flex items-center gap-1.5 text-[10px] text-slate-500"><input type="checkbox" checked={module.is_enabled} disabled={!canManage || !module.is_contracted || !isModuleAvailable(module.availability_status)} onChange={(event) => void updateModule(license.id, module, module.is_contracted, event.target.checked)} className="accent-emerald-500 disabled:opacity-40" />Liberado</label>
               </div>
             </div>)}</div> : <p className="rounded-lg border border-dashed border-white/[0.08] p-5 text-center text-xs text-slate-600">Nenhum módulo cadastrado para este sistema.</p>}
+          <div className="mt-5 border-t border-white/[0.06] pt-4"><div className="flex flex-wrap items-center justify-between gap-2"><div><h2 className="text-xs font-semibold text-slate-200">Middleware por rotas</h2><p className="mt-1 text-[11px] text-slate-600">Associe cada rota real ao identificador do módulo, sem alterar o cadastro existente.</p></div><button type="button" onClick={() => void generateMiddleware(license.id)} className="rounded-lg border border-blue-400/20 px-3 py-2 text-[11px] font-medium text-blue-200 hover:bg-blue-400/10">Gerar middleware.ts</button></div>
+            <form onSubmit={(event) => void addRoute(event)} className="mt-3 grid gap-2 md:grid-cols-[1fr_1fr_1fr_auto]"><select required value={routeForm.licenseId === license.id ? routeForm.moduleId : ''} onChange={(event) => setRouteForm((current) => ({ ...current, licenseId: license.id, moduleId: event.target.value }))} className={`${inputClass} mt-0`}><option value="">Módulo</option>{license.modules.map((module) => <option key={module.id} value={module.id}>{module.name} · {module.internal_code}</option>)}</select><input required value={routeForm.licenseId === license.id ? routeForm.pattern : ''} onChange={(event) => setRouteForm((current) => ({ ...current, licenseId: license.id, pattern: event.target.value }))} placeholder="/financeiro/:path*" className={`${inputClass} mt-0`} /><input value={routeForm.licenseId === license.id ? routeForm.blockedPath : '/acesso-bloqueado'} onChange={(event) => setRouteForm((current) => ({ ...current, licenseId: license.id, blockedPath: event.target.value }))} placeholder="/acesso-bloqueado" className={`${inputClass} mt-0`} /><button disabled={!canManage} className="rounded-lg bg-blue-500 px-3 py-2 text-[11px] font-semibold text-white disabled:opacity-40">Adicionar</button></form>
+            <div className="mt-3 space-y-1.5">{(routesByLicense[license.id] ?? []).map((route) => <div key={route.id} className="flex items-center justify-between rounded-lg border border-white/[0.06] px-3 py-2 text-[11px]"><span className="font-mono text-slate-300">{route.route_pattern}</span><span className="text-slate-500">{license.modules.find((module) => module.id === route.module_id)?.internal_code ?? 'módulo'}</span></div>)}{routesByLicense[license.id]?.length === 0 && <p className="text-[11px] text-slate-600">Nenhuma rota configurada. Cadastre uma rota real para gerar o middleware.</p>}</div>
+            {middlewareByLicense[license.id] && <textarea readOnly value={middlewareByLicense[license.id]} aria-label="middleware.ts gerado" className="mt-3 min-h-64 w-full rounded-lg border border-white/[0.06] bg-black/20 p-3 font-mono text-[10px] text-slate-300 outline-none" />}</div>
           </div>}
         </article>
       })}</div> : <div className="rounded-xl border border-white/[0.07] bg-[#11161e] p-10 text-center"><Check className="mx-auto size-6 text-slate-600" /><p className="mt-3 text-sm text-slate-400">Nenhuma licença encontrada</p><p className="mt-1 text-xs text-slate-600">Emita uma licença para começar a controlar o acesso aos módulos.</p></div>}
