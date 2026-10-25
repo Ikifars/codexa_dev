@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useMemo, useState } from 'react'
 import { Check, Copy, Download, KeyRound, Loader2, Plus, Search, ShieldCheck, Trash2, X } from 'lucide-react'
+import JSZip from 'jszip'
 import { isModuleAvailable } from '@/lib/licensing/module-status'
 import { IntegrationHelp } from '@/components/integration-help'
 
@@ -226,19 +227,22 @@ export function LicenseWorkspace({ permissions }: { permissions: string[] }) {
     setNotice('middleware.ts gerado com matcher estático para as rotas configuradas.')
   }
 
-  function downloadSingleRoutePackage(license: License) {
+  async function downloadSingleRoutePackage(license: License) {
     const files: Record<string, string> = {
       'lib/codexa-license.ts': `import 'server-only'\n\nexport type CodexaModule = { code: string; name: string; contracted: boolean; enabled: boolean; available: boolean; licensed: boolean }\nexport type CodexaDecision = { valid: boolean; reason: string | null; expiresAt: string | null; modules: CodexaModule[] }\nlet cached: { until: number; value: CodexaDecision } | null = null\nexport async function getCodexaLicense(): Promise<CodexaDecision> {\n  const url = process.env.CODEXA_LICENSE_API_URL\n  const key = process.env.CODEXA_LICENSE_KEY\n  if (!url || !key) return { valid: false, reason: 'license_not_configured', expiresAt: null, modules: [] }\n  if (cached && cached.until > Date.now()) return cached.value\n  const response = await fetch(url, { method: 'POST', headers: { Authorization: \`Bearer \${key}\`, Accept: 'application/json' }, cache: 'no-store' })\n  const body = await response.json().catch(() => null) as CodexaDecision | null\n  if (!response.ok || !body || typeof body.valid !== 'boolean' || !Array.isArray(body.modules)) return { valid: false, reason: 'license_service_unavailable', expiresAt: null, modules: [] }\n  cached = { value: body, until: Date.now() + 120000 }\n  return body\n}\nexport async function hasCodexaModule(code: string) { const decision = await getCodexaLicense(); return decision.valid && decision.modules.some((module) => module.code === code && module.licensed) }\nexport async function requireCodexaModule(code: string) { if (!(await hasCodexaModule(code))) throw new Error('module_not_licensed') }`,
       '.env.example': `CODEXA_LICENSE_API_URL=https://seu-painel.vercel.app/api/licenses/validate\nCODEXA_LICENSE_KEY=configure-no-servidor`,
       'INSTALACAO.md': ['# Integração Codexa por rota única', '', 'Copie lib/codexa-license.ts para o projeto Next.js cliente e configure as variáveis do .env.local acima. Não use NEXT_PUBLIC_ e nunca importe o helper em componentes client-side.', '', 'No ponto central que renderiza /admin, use hasCodexaModule(\'CODIGO_DO_MODULO\'). Em cada Route Handler ou Server Action protegido, chame requireCodexaModule(\'CODIGO_DO_MODULO\').', '', 'A ocultação é apenas visual e não substitui a proteção server-side nem as políticas RLS do cliente.', '', 'Módulos incluídos nesta licença:', ...license.modules.map((module) => `- ${module.internal_code} — ${module.name}`), '', 'Falha de rede, licença expirada, revogada ou configuração ausente bloqueia o acesso.'].join('\\n'),
     }
-    const blob = new Blob([JSON.stringify({ format: 'codexa-installation-package', files }, null, 2)], { type: 'application/json' })
+    const zip = new JSZip()
+    Object.entries(files).forEach(([path, content]) => zip.file(path, content))
+    const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 6 } })
     const link = document.createElement('a')
-    link.href = URL.createObjectURL(blob)
-    link.download = `codexa-integracao-${license.id}.json`
+    const objectUrl = URL.createObjectURL(blob)
+    link.href = objectUrl
+    link.download = `codexa-integracao-${license.id}.zip`
     link.click()
-    URL.revokeObjectURL(link.href)
-    setNotice('Pacote completo gerado. Ele contém o helper, o modelo de ambiente e as instruções de instalação.')
+    URL.revokeObjectURL(objectUrl)
+    setNotice('Pacote ZIP completo gerado. Ele contém o helper, o modelo de ambiente e as instruções de instalação.')
   }
 
   return <section className="space-y-6">
