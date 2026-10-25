@@ -198,10 +198,27 @@ export function LicenseWorkspace({ permissions }: { permissions: string[] }) {
   }
 
   async function generateMiddleware(licenseId: string) {
+    setError('')
+    setNotice('')
     try {
-      const result = await requestJson<{ source: string }>(`/api/admin/licenses/${licenseId}/middleware`)
+      const result = await requestJson<{ source: string; routeCount: number; warning?: string | null }>(`/api/admin/licenses/${licenseId}/middleware`)
+      if (!result.routeCount) throw new Error(result.warning || 'Cadastre ao menos uma rota protegida antes de gerar o middleware.')
       setMiddlewareByLicense((current) => ({ ...current, [licenseId]: result.source }))
+      setNotice(`middleware.ts gerado com ${result.routeCount} rota${result.routeCount === 1 ? '' : 's'}. Baixe o arquivo e revise antes de instalar no cliente.`)
     } catch (generateError) { setError(generateError instanceof Error ? generateError.message : 'Não foi possível gerar o middleware.') }
+  }
+
+  function downloadMiddleware(licenseId: string) {
+    const source = middlewareByLicense[licenseId]
+    if (!source) return
+    const blob = new Blob([source], { type: 'text/typescript;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const anchor = document.createElement('a')
+    anchor.href = url
+    anchor.download = 'middleware.ts'
+    anchor.click()
+    URL.revokeObjectURL(url)
+    setNotice('middleware.ts baixado. Coloque o arquivo na raiz do projeto Next.js e configure CODEXA_LICENSE_KEY no servidor.')
   }
 
   async function deleteLicense(license: License) {
@@ -333,7 +350,7 @@ export function LicenseWorkspace({ permissions }: { permissions: string[] }) {
           <div className="mt-5 border-t border-white/[0.06] pt-4"><div className="flex flex-wrap items-center justify-between gap-2"><div><h2 className="text-xs font-semibold text-slate-200">Middleware por rotas</h2><p className="mt-1 text-[11px] text-slate-600">Associe cada rota real ao identificador do módulo, sem alterar o cadastro existente.</p></div><button type="button" onClick={() => void generateMiddleware(license.id)} className="rounded-lg border border-blue-400/20 px-3 py-2 text-[11px] font-medium text-blue-200 hover:bg-blue-400/10">Gerar middleware.ts</button></div>
             <form onSubmit={(event) => void addRoute(event)} className="mt-3 grid gap-2 md:grid-cols-[1fr_1fr_1fr_auto]"><select required value={routeForm.licenseId === license.id ? routeForm.moduleId : ''} onChange={(event) => setRouteForm((current) => ({ ...current, licenseId: license.id, moduleId: event.target.value }))} className={`${inputClass} mt-0`}><option value="">Módulo</option>{license.modules.map((module) => <option key={module.id} value={module.id}>{module.name} · {module.internal_code}</option>)}</select><input required value={routeForm.licenseId === license.id ? routeForm.pattern : ''} onChange={(event) => setRouteForm((current) => ({ ...current, licenseId: license.id, pattern: event.target.value }))} placeholder="/financeiro/:path*" className={`${inputClass} mt-0`} /><input value={routeForm.licenseId === license.id ? routeForm.blockedPath : '/acesso-bloqueado'} onChange={(event) => setRouteForm((current) => ({ ...current, licenseId: license.id, blockedPath: event.target.value }))} placeholder="/acesso-bloqueado" className={`${inputClass} mt-0`} /><button disabled={!canManage} className="rounded-lg bg-blue-500 px-3 py-2 text-[11px] font-semibold text-white disabled:opacity-40">Adicionar</button></form>
             <div className="mt-3 space-y-1.5">{(routesByLicense[license.id] ?? []).map((route) => <div key={route.id} className="flex items-center justify-between rounded-lg border border-white/[0.06] px-3 py-2 text-[11px]"><span className="font-mono text-slate-300">{route.route_pattern}</span><span className="text-slate-500">{license.modules.find((module) => module.id === route.module_id)?.internal_code ?? 'módulo'}</span></div>)}{routesByLicense[license.id]?.length === 0 && <p className="text-[11px] text-slate-600">Nenhuma rota configurada. Cadastre uma rota real para gerar o middleware.</p>}</div>
-            {middlewareByLicense[license.id] && <textarea readOnly value={middlewareByLicense[license.id]} aria-label="middleware.ts gerado" className="mt-3 min-h-64 w-full rounded-lg border border-white/[0.06] bg-black/20 p-3 font-mono text-[10px] text-slate-300 outline-none" />}</div>
+            {middlewareByLicense[license.id] && <div className="mt-3"><div className="flex items-center justify-between gap-2"><p className="text-[11px] text-emerald-300">middleware.ts pronto para instalação</p><button type="button" onClick={() => downloadMiddleware(license.id)} className="rounded-lg bg-emerald-500/15 px-3 py-2 text-[11px] font-semibold text-emerald-200 hover:bg-emerald-500/25">Baixar middleware.ts</button></div><textarea readOnly value={middlewareByLicense[license.id]} aria-label="middleware.ts gerado" className="mt-2 min-h-64 w-full rounded-lg border border-white/[0.06] bg-black/20 p-3 font-mono text-[10px] text-slate-300 outline-none" /></div>}</div>
           </div>}
         </article>
       })}</div> : <div className="rounded-xl border border-white/[0.07] bg-[#11161e] p-10 text-center"><Check className="mx-auto size-6 text-slate-600" /><p className="mt-3 text-sm text-slate-400">Nenhuma licença encontrada</p><p className="mt-1 text-xs text-slate-600">Emita uma licença para começar a controlar o acesso aos módulos.</p></div>}
