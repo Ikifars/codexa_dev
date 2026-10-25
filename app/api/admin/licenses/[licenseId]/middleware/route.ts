@@ -8,7 +8,7 @@ export async function GET(_request: Request, context: { params: Promise<{ licens
     const { supabase } = await requireWorkspacePermission('licenses', 'view')
     const [{ data: license, error: licenseError }, { data: routes, error: routesError }] = await Promise.all([
       supabase.from('licenses').select('id,system_id').eq('id', licenseId).maybeSingle(),
-      supabase.from('license_route_mappings').select('route_pattern,blocked_path,module_id,system_modules!inner(internal_code,system_id)').eq('license_id', licenseId).order('route_pattern'),
+      supabase.from('license_route_mappings').select('route_pattern,blocked_path,system_module_id,system_modules!inner(internal_code,system_id)').eq('license_id', licenseId).order('route_pattern'),
     ])
     if (licenseError) throw licenseError
     if (routesError) throw routesError

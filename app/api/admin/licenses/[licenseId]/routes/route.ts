@@ -8,7 +8,7 @@ export async function GET(_request: Request, context: { params: Promise<{ licens
   try {
     const { licenseId } = await context.params
     const { supabase } = await requireWorkspacePermission('licenses', 'view')
-    const { data, error } = await supabase.from('license_route_mappings').select('id,license_id,system_id,module_id,route_pattern,blocked_path,system_modules!inner(name,internal_code,system_id)').eq('license_id', licenseId).order('route_pattern')
+    const { data, error } = await supabase.from('license_route_mappings').select('id,license_id,system_module_id,route_pattern,blocked_path,system_modules!inner(name,internal_code,system_id)').eq('license_id', licenseId).order('route_pattern')
     if (error) throw error
     return NextResponse.json({ routes: (data ?? []).map((route) => ({ ...route, system_modules: Array.isArray(route.system_modules) ? route.system_modules[0] : route.system_modules })) })
   } catch (error) { return fail(error) }
@@ -28,7 +28,7 @@ export async function POST(request: Request, context: { params: Promise<{ licens
     const pattern = String(body.routePattern ?? '').trim()
     const blockedPath = String(body.blockedPath ?? '/acesso-bloqueado').trim()
     buildMiddlewareSource([{ pattern, module: module.internal_code, blockedPath }], 'https://invalid.local')
-    const { data, error } = await supabase.from('license_route_mappings').insert({ license_id: licenseId, system_id: license.system_id, module_id: module.id, route_pattern: pattern, blocked_path: blockedPath }).select('id,license_id,system_id,module_id,route_pattern,blocked_path').single()
+    const { data, error } = await supabase.from('license_route_mappings').insert({ license_id: licenseId, system_module_id: module.id, route_pattern: pattern, blocked_path: blockedPath }).select('id,license_id,system_module_id,route_pattern,blocked_path').single()
     if (error) return NextResponse.json({ error: error.code === '23505' ? 'Esta rota já está configurada para a licença.' : error.message }, { status: error.code === '23505' ? 409 : 500 })
     return NextResponse.json({ route: data }, { status: 201 })
   } catch (error) { return fail(error) }
