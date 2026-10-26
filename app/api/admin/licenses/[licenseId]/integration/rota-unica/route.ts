@@ -33,7 +33,9 @@ export async function POST(request: Request, context: { params: Promise<{ licens
     zip.file('codexa-integration/lib/codexa-license.ts', licenseSource(apiUrl))
     zip.file('codexa-integration/app/admin/page.tsx', generatePageWrapper())
     zip.file('codexa-integration/app/admin/AdminClient.tsx', generated.source)
-    zip.file('codexa-integration/INSTALL.md', `# Integração Codexa\n\nCopie os arquivos preservando os caminhos. Configure no servidor:\n\nCODEXA_LICENSE_API_URL=${apiUrl}\nCODEXA_LICENSE_KEY=\n\nA chave nunca deve usar o prefixo NEXT_PUBLIC_. Mapeamento detectado: ${JSON.stringify(generated.analysis.mappings)}\n`)
+    const manifest = { mode: 'single-route', framework: 'Next.js / TypeScript', files: ['lib/codexa-license.ts', 'app/admin/page.tsx', 'app/admin/AdminClient.tsx', 'INSTALL.md'], detectedTabs: generated.analysis.tabs, confirmedMappings: generated.analysis.mappings, warnings: generated.analysis.warnings }
+    zip.file('codexa-integration/manifest.json', JSON.stringify(manifest, null, 2))
+    zip.file('codexa-integration/INSTALL.md', `# Integração Codexa — rota única\n\nO pacote foi gerado a partir do código fornecido e validado sintaticamente.\n\n## Instalação\n\n1. Extraia na raiz do projeto e preserve os caminhos do manifest.json.\n2. Revise os arquivos listados antes de substituir qualquer arquivo existente.\n3. Configure no servidor:\n\nCODEXA_LICENSE_API_URL=${apiUrl}\nCODEXA_LICENSE_KEY=\n\nA chave nunca deve usar o prefixo NEXT_PUBLIC_.\n\n## Limites de segurança\n\nO bloqueio de interface e navegação não substitui autorização de APIs, RLS ou validação de operações no backend.\n\nAbas detectadas: ${generated.analysis.tabs.join(', ')}\nMapeamentos confirmados: ${JSON.stringify(generated.analysis.mappings)}\n`)
     const body = await zip.generateAsync({ type: 'uint8array', compression: 'DEFLATE' })
     return new NextResponse(body as BodyInit, { headers: { 'Content-Type': 'application/zip', 'Content-Disposition': 'attachment; filename="codexa-integration-rota-unica.zip"', 'Cache-Control': 'no-store' } })
   } catch (error) { return errorResponse(error) }

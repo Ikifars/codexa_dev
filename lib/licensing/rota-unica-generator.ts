@@ -11,6 +11,7 @@ export type RotaUnicaAnalysis = {
   tabs: string[]
   mappings: TabMapping[]
   warnings: string[]
+  requiresConfirmation: boolean
 }
 
 function unique(values: string[]) { return [...new Set(values)] }
@@ -41,24 +42,28 @@ export function analyzeAdminClient(source: string, modules: IntegrationModule[])
   })
   if (!stateName || tabs.length < 2) throw new Error('Não foi possível detectar uma navegação de abas segura. Informe uma página que use useState com união literal de abas, ou configure o mapeamento manualmente.')
   const normalizedTabs = unique(tabs)
-  const mappings = normalizedTabs.map((tab, index) => ({ code: modules[index]?.code ?? '', tab })).filter((item) => item.code)
-  const warnings = modules.length > normalizedTabs.length ? ['Há mais módulos do que abas detectadas; revise o mapeamento antes de instalar.'] : []
-  return { stateName, tabs: normalizedTabs, mappings, warnings }
+  const mappings: TabMapping[] = []
+  const warnings = ['A associação entre áreas e códigos de módulo precisa ser confirmada explicitamente antes da instalação.']
+  return { stateName, tabs: normalizedTabs, mappings, warnings, requiresConfirmation: true }
 }
 
 function addAllowedProp(ast: t.File) {
   let changed = false
   traverse(ast, {
     FunctionDeclaration(path) {
-      if (!path.node.id?.name || !path.node.id.name.toLowerCase().includes('admin')) return
-      if (path.node.params.length === 0) path.node.params.push(t.objectPattern([t.objectProperty(t.identifier('allowedModules'), t.identifier('allowedModules'))]))
+      if (!path.node.id?.name || path.node.params.length > 0) return
+      if (!path.node.body || !t.isBlockStatement(path.node.body)) return
+      if (!path.node.body.body.some((statement) => t.isReturnStatement(statement))) return
+      path.node.params.push(t.objectPattern([t.objectProperty(t.identifier('allowedModules'), t.identifier('allowedModules'))]))
       changed = true
       path.stop()
     },
     VariableDeclarator(path) {
-      if (!t.isIdentifier(path.node.id) || !path.node.id.name.toLowerCase().includes('admin') || !t.isArrowFunctionExpression(path.node.init)) return
+      if (!t.isIdentifier(path.node.id) || !t.isArrowFunctionExpression(path.node.init)) return
       const fn = path.node.init
-      if (fn.params.length === 0) fn.params.push(t.objectPattern([t.objectProperty(t.identifier('allowedModules'), t.identifier('allowedModules'))]))
+      if (fn.params.length > 0 || (!t.isBlockStatement(fn.body) && !t.isJSXElement(fn.body))) return
+      if (t.isBlockStatement(fn.body) && !fn.body.body.some((statement) => t.isReturnStatement(statement))) return
+      fn.params.push(t.objectPattern([t.objectProperty(t.identifier('allowedModules'), t.identifier('allowedModules'))]))
       changed = true
       path.stop()
     },
@@ -69,7 +74,10 @@ function addAllowedProp(ast: t.File) {
 export function generateRotaUnicaIntegration(originalCode: string, modules: IntegrationModule[], mapping?: TabMapping[]) {
   const analysis = analyzeAdminClient(originalCode, modules)
   const selected = mapping?.length ? mapping : analysis.mappings
-  if (selected.length === 0) throw new Error('Nenhum módulo pôde ser associado às abas detectadas.')
+  if (selected.length === 0) throw new Error('Confirme o mapeamento explícito entre cada área detectada e o código do módulo Codexa antes de gerar.')
+  const validTabs = new Set(analysis.tabs)
+  const validCodes = new Set(modules.map((module) => module.code))
+  if (selected.some((item) => !validTabs.has(item.tab) || !validCodes.has(item.code))) throw new Error('O mapeamento contém uma aba ou código de módulo inexistente.')
   const ast = parse(originalCode, { sourceType: 'module', plugins: ['typescript', 'jsx'] })
   if (!addAllowedProp(ast)) throw new Error('A página foi analisada, mas não encontrei um componente AdminClient modificável.')
   const generated = generate(ast, { retainLines: false, jsescOption: { minimal: true } }).code
