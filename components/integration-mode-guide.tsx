@@ -7,7 +7,7 @@ type IntegrationMode = 'routes' | 'single'
 
 const guides = {
   routes: {
-    title: 'Integração automática com rotas existentes',
+    title: 'Integração padrão',
     compatibility: 'Next.js com páginas ou layouts independentes por módulo',
     description: 'Protege rotas já existentes com uma verificação server-side antes de disponibilizar cada módulo.',
     sections: [
@@ -26,7 +26,7 @@ const guides = {
     ],
   },
   single: {
-    title: 'Integração com rota única',
+    title: 'Integração rota única',
     compatibility: 'Sistemas com abas, estado React ou conteúdo condicional na mesma página',
     description: 'Adapta uma página administrativa existente para consultar permissões por módulo sem presumir nomes de abas ou clientes.',
     sections: [
