@@ -28,9 +28,9 @@ const guides = {
   single: {
     title: 'Integração rota única',
     compatibility: 'Sistemas com abas, estado React ou conteúdo condicional na mesma página',
-    description: 'Adapta uma página administrativa existente para consultar permissões por módulo sem presumir nomes de abas ou clientes.',
+    description: 'Gera a integração completa de uma página administrativa existente, incluindo o pacote de instalação. É a opção recomendada para integrar uma página com abas.',
     sections: [
-      ['O que é este modo', 'A integração mantém uma única rota e controla quais áreas internas podem ser navegadas e renderizadas. O código original é analisado como TypeScript/TSX antes de qualquer pacote ser produzido.'],
+      ['O que é este modo', 'A integração mantém uma única rota e controla quais áreas internas podem ser navegadas e renderizadas. O código original é analisado como TypeScript/TSX antes de qualquer pacote ser produzido. Este é o fluxo completo; o helper isolado é uma alternativa avançada para integração manual.'],
       ['Quando utilizar', 'Use quando Financeiro, Clientes e Relatórios compartilham a mesma página, seja por tabs, estado React, menu interno ou renderização condicional. Para páginas independentes, use rotas existentes.'],
       ['O que a Codexa faz automaticamente', 'Analisa a sintaxe, identifica candidatos a estados de navegação, valida o mapeamento, gera o helper server-side e cria um ZIP com somente os arquivos necessários e um manifesto de instalação.'],
       ['O que é necessário antes de gerar', 'Envie o arquivo original da página, informe framework/estrutura quando solicitado e confirme a associação entre cada área e o internal_code da Codexa. Associações ambíguas interrompem a geração.'],
@@ -41,7 +41,7 @@ const guides = {
       ['Testes após a instalação', 'Verifique licença válida e inválida, cada módulo liberado, ocultação de áreas bloqueadas, troca para fallback após revogação, CRUD dos módulos permitidos, build e ausência da chave no navegador.'],
       ['Problemas comuns e soluções', 'Estrutura não reconhecida exige mapeamento manual ou uma página mais simples; código divergente indica internal_code incorreto; erro de import aponta caminho diferente; falha de API exige conferir URL, chave e disponibilidade da licença.'],
       ['Atualização e manutenção', 'Regere quando a estrutura da página ou os módulos mudarem. Compare o ZIP com suas alterações locais e preserve handlers, estilos e regras próprias; não há merge automático.'],
-      ['Resumo final', 'O pacote contém arquivos de integração, manifesto e instruções. Você confirma o mapeamento, instala os caminhos listados, configura o servidor e testa cada estado de autorização.'],
+      ['Resumo final', 'O pacote contém arquivos de integração, manifesto e instruções. Você confirma o mapeamento, instala os caminhos listados, configura o servidor e testa cada estado de autorização. Use o botão de helper apenas se você já souber integrar manualmente o código.'],
     ],
   },
 } as const

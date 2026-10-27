@@ -243,7 +243,7 @@ export function LicenseWorkspace({ permissions }: { permissions: string[] }) {
     try {
       const result = await requestJson<{ source: string; moduleCount: number }>(`/api/admin/licenses/${licenseId}/integration/helper`)
       setSingleRouteByLicense((current) => ({ ...current, [licenseId]: result.source }))
-      setNotice(`Integração de rota única gerada para ${result.moduleCount} módulos. Ela deve ser usada em Server Components ou Route Handlers.`)
+      setNotice(`Helper isolado gerado para ${result.moduleCount} módulos. Esta é uma opção avançada para uso manual em Server Components ou Route Handlers.`)
     } catch (generateError) { setError(generateError instanceof Error ? generateError.message : 'Não foi possível gerar a integração de rota única.') }
   }
 
