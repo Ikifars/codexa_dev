@@ -184,7 +184,7 @@ export function ProjectListWorkspace({ onSwitchModule, permissions }: { onSwitch
 
   const statusOptions = [...new Set(projects.map((project) => project.status).filter(Boolean))]
   const priorityOptions = [...new Set(projects.map((project) => project.priority).filter(Boolean))]
-  const activeMembers = members.filter(isActiveMember)
+  const activeMembers = Array.from(new Map(members.filter(isActiveMember).map((member) => [member.user_id || member.id, member])).values())
   const canCreateProjects = permissions.includes('*') || permissions.includes('projects:create')
   const availableModuleTabs = moduleTabs.filter(({ key }) => hasWorkspaceAccess(permissions, key === 'support_tickets' ? 'suporte' : key === 'change_requests' ? 'solicitacoes' : 'projetos'))
 
