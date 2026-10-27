@@ -301,15 +301,6 @@ export function LicenseWorkspace({ permissions }: { permissions: string[] }) {
 
   return <section className="space-y-6">
     <header className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
-      <div>
-        <p className="mb-2 text-xs font-medium uppercase tracking-[0.16em] text-blue-400">Produtos e acesso</p>
-        <h1 className="text-2xl font-semibold text-white">Licenças</h1>
-        <div className="flex items-start gap-2"><p className="mt-1.5 text-sm text-slate-500">Gerencie chaves, validade, contratação e liberação dos módulos por sistema.</p><IntegrationHelp title="licenças" steps={['Selecione o cliente e o sistema que receberão a licença.', 'Defina a validade, se houver, e emita a licença.', 'Dentro da licença, marque primeiro os módulos contratados.', 'Depois marque Liberado apenas para módulos disponíveis ao cliente.', 'Altere status ou validade quando o acesso precisar ser suspenso ou renovado.']} /></div>
-      </div>
-      {canManage && <button onClick={() => { setShowForm((value) => !value); setError('') }} className="flex w-fit items-center gap-2 rounded-lg bg-blue-500 px-3.5 py-2.5 text-xs font-semibold text-white hover:bg-blue-400">
-        {showForm ? <X className="size-4" /> : <Plus className="size-4" />}{showForm ? 'Fechar' : 'Nova licença'}
-      </button>}
-    </header>
 
     {error && <div role="alert" className="rounded-lg border border-rose-500/20 bg-rose-500/10 px-4 py-3 text-sm text-rose-300">{error}</div>}
     {notice && <div role="status" className="rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-300">{notice}</div>}
@@ -406,5 +397,6 @@ export function LicenseWorkspace({ permissions }: { permissions: string[] }) {
         </article>
       })}</div> : <div className="rounded-xl border border-white/[0.07] bg-[#11161e] p-10 text-center"><Check className="mx-auto size-6 text-slate-600" /><p className="mt-3 text-sm text-slate-400">Nenhuma licença encontrada</p><p className="mt-1 text-xs text-slate-600">Emita uma licença para começar a controlar o acesso aos módulos.</p></div>}
     {guideMode && <IntegrationModeGuide mode={guideMode} onClose={() => setGuideMode(null)} />}
+    </header>
   </section>
 }
