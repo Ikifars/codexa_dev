@@ -9,6 +9,10 @@
     "start": "next start"
   },
   "dependencies": {
+    "@babel/generator": "^8.0.6",
+    "@babel/parser": "^8.0.8",
+    "@babel/traverse": "^8.0.7",
+    "@babel/types": "^8.0.8",
     "@base-ui/react": "^1.5.0",
     "@supabase/ssr": "^0.12.7",
     "@supabase/supabase-js": "^2.118.0",
@@ -26,6 +30,7 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.3.3",
+    "@types/babel__traverse": "^7.28.0",
     "@types/node": "^24",
     "@types/react": "^19",
     "@types/react-dom": "^19",
