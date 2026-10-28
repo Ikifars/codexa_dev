@@ -29,15 +29,19 @@ export function analyzeAdminClient(source: string, modules: IntegrationModule[])
     CallExpression(path) {
       if (!t.isIdentifier(path.node.callee, { name: 'useState' })) return
       const argument = path.node.arguments[0]
-      if (!argument || !t.isStringLiteral(argument)) return
+      if (!argument || (!t.isStringLiteral(argument) && !t.isArrayExpression(argument))) return
       const parent = path.parentPath
       if (!parent.isVariableDeclarator() || !t.isArrayPattern(parent.node.id)) return
       const [state] = parent.node.id.elements
       if (!t.isIdentifier(state)) return
       const annotation = t.isPattern(parent.node.id) ? parent.node.id.typeAnnotation : null
       const typeText = annotation ? generate(annotation).code : ''
-      const values = [...typeText.matchAll(/['\"]([^'\"]+)['\"]/g)].map((match) => match[1])
-      if (values.length > 0 && !stateName) { stateName = state.name; tabs.push(...values) }
+      const values = [...typeText.matchAll(/[\'"]([^\'"]+)[\'"]/g)].map((match) => match[1])
+      const initializerValues = t.isArrayExpression(argument)
+        ? argument.elements.flatMap((element) => t.isStringLiteral(element) ? [element.value] : [])
+        : []
+      const detectedValues = unique([...values, ...initializerValues])
+      if (detectedValues.length > 0 && !stateName) { stateName = state.name; tabs.push(...detectedValues) }
     },
   })
   if (!stateName || tabs.length < 2) throw new Error('Não foi possível detectar uma navegação de abas segura. Informe uma página que use useState com união literal de abas, ou configure o mapeamento manualmente.')
@@ -75,9 +79,13 @@ export function generateRotaUnicaIntegration(originalCode: string, modules: Inte
   const analysis = analyzeAdminClient(originalCode, modules)
   const selected = mapping?.length ? mapping : analysis.mappings
   if (selected.length === 0) throw new Error('Confirme o mapeamento explícito entre cada área detectada e o código do módulo Codexa antes de gerar.')
+  if (selected.some((item) => !item || typeof item.tab !== 'string' || typeof item.code !== 'string' || !item.tab.trim() || !item.code.trim())) throw new Error('Cada mapeamento precisa conter uma aba e um código de módulo preenchidos.')
+  const tabsSeen = new Set<string>()
+  if (selected.some((item) => tabsSeen.has(item.tab) || !tabsSeen.add(item.tab))) throw new Error('Cada aba detectada só pode ser mapeada uma vez.')
   const validTabs = new Set(analysis.tabs)
   const validCodes = new Set(modules.map((module) => module.code))
   if (selected.some((item) => !validTabs.has(item.tab) || !validCodes.has(item.code))) throw new Error('O mapeamento contém uma aba ou código de módulo inexistente.')
+  if (analysis.tabs.some((tab) => !selected.some((item) => item.tab === tab))) throw new Error('Mapeie todas as abas detectadas antes de gerar o pacote.')
   const ast = parse(originalCode, { sourceType: 'module', plugins: ['typescript', 'jsx'] })
   if (!addAllowedProp(ast)) throw new Error('A página foi analisada, mas não encontrei um componente AdminClient modificável.')
   const generated = generate(ast, { retainLines: false, jsescOption: { minimal: true } }).code
