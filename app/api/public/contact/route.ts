@@ -12,11 +12,15 @@ export async function GET(request: Request) {
   if (error) return NextResponse.json({ error: 'Não foi possível carregar os destinatários.' }, { status: 500 })
   const sectorRole = sector === 'Suporte Técnico' ? 'suporte' : sector === 'Operações' ? 'operacional' : sector.toLowerCase()
   const activeStatuses = new Set(['active', 'ativo', 'enabled', 'habilitado'])
-  const employees = (data ?? []).filter((member) => {
+  const uniqueEmployees = new Map<string, { id: string; name: string; sector: string }>()
+  for (const member of data ?? []) {
     const role = String(member.role_name ?? '').trim().toLowerCase()
     const status = String(member.status ?? '').trim().toLowerCase().replaceAll('"', '')
-    return activeStatuses.has(status) && role === sectorRole
-  }).map((member) => ({ id: member.id, name: member.full_name ?? 'Equipe Codexa', sector }))
+    if (!activeStatuses.has(status) || role !== sectorRole) continue
+    const key = String(member.full_name ?? '').trim().toLowerCase()
+    if (!uniqueEmployees.has(key)) uniqueEmployees.set(key, { id: member.id, name: member.full_name ?? 'Equipe Codexa', sector })
+  }
+  const employees = [...uniqueEmployees.values()]
   return NextResponse.json({ employees })
 }
 

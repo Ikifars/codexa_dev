@@ -22,7 +22,13 @@ export async function GET() {
       console.error('Team list load failed:', membersError?.message ?? rolesError?.message)
       return NextResponse.json({ error: 'Não foi possível carregar usuários e cargos.' }, { status: 503 })
     }
-    return NextResponse.json({ members: members ?? [], roles: roles ?? [] }, { headers: { 'Cache-Control': 'private, no-store' } })
+    const uniqueMembers = new Map<string, (typeof members)[number]>()
+    for (const member of members ?? []) {
+      const key = member.user_id ?? member.email.trim().toLowerCase()
+      const previous = uniqueMembers.get(key)
+      if (!previous || (!previous.user_id && member.user_id)) uniqueMembers.set(key, member)
+    }
+    return NextResponse.json({ members: [...uniqueMembers.values()], roles: roles ?? [] }, { headers: { 'Cache-Control': 'private, no-store' } })
   } catch (error) {
     return fail(error)
   }
