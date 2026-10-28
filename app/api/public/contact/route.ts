@@ -1,0 +1,48 @@
+import { NextResponse } from 'next/server'
+import { createServiceClient } from '@/lib/supabase/server-client'
+
+const sectors = new Set(['Comercial', 'Suporte Técnico', 'Financeiro', 'Operações'])
+const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
+export async function GET(request: Request) {
+  const sector = new URL(request.url).searchParams.get('sector') ?? ''
+  if (!sectors.has(sector)) return NextResponse.json({ employees: [] })
+  const supabase = createServiceClient()
+  const { data, error } = await supabase.from('team_members').select('id, display_name, full_name, role_name, status').eq('status', 'active')
+  if (error) return NextResponse.json({ error: 'Não foi possível carregar os destinatários.' }, { status: 500 })
+  const employees = (data ?? []).filter((member) => {
+    const role = String(member.role_name ?? '').toLowerCase()
+    const sectorRole = sector === 'Suporte Técnico' ? 'suporte' : sector === 'Operações' ? 'operacional' : sector.toLowerCase()
+    return role === sectorRole
+  }).map((member) => ({ id: member.id, name: member.display_name ?? member.full_name ?? 'Equipe Codexa', sector }))
+  return NextResponse.json({ employees })
+}
+
+export async function POST(request: Request) {
+  const form = await request.formData()
+  const kind = String(form.get('kind') ?? '')
+  const name = String(form.get('name') ?? '').trim()
+  const email = String(form.get('email') ?? '').trim().toLowerCase()
+  const subject = String(form.get('subject') ?? '').trim()
+  const body = String(form.get('body') ?? '').trim()
+  const company = String(form.get('company') ?? '').trim() || null
+  if (!['message', 'support'].includes(kind) || name.length < 2 || name.length > 120 || !emailPattern.test(email) || subject.length < 2 || subject.length > 180 || body.length < 10 || body.length > 5000 || form.get('consent') !== 'on') return NextResponse.json({ error: 'Revise os campos obrigatórios e o consentimento.' }, { status: 400 })
+  const supabase = createServiceClient()
+  if (kind === 'message') {
+    const sector = String(form.get('sector') ?? '')
+    if (!sectors.has(sector)) return NextResponse.json({ error: 'Escolha um setor válido.' }, { status: 400 })
+    const employeeId = String(form.get('employee_id') ?? '') || null
+    if (employeeId) {
+      const { data } = await supabase.from('team_members').select('id, role_name, status').eq('id', employeeId).maybeSingle()
+      const expectedRole = sector === 'Suporte Técnico' ? 'suporte' : sector === 'Operações' ? 'operacional' : sector.toLowerCase()
+      if (!data || data.status !== 'active' || String(data.role_name).toLowerCase() !== expectedRole) return NextResponse.json({ error: 'O destinatário não está disponível neste setor.' }, { status: 400 })
+    }
+    const { error } = await supabase.from('public_contact_messages').insert({ sender_name: name, sender_email: email, company, sector, employee_id: employeeId, subject, body, source: 'landing_page' })
+    if (error) return NextResponse.json({ error: 'Não foi possível registrar a mensagem.' }, { status: 500 })
+  } else {
+    const category = String(form.get('category') ?? 'Técnico')
+    const { error } = await supabase.from('public_support_requests').insert({ requester_name: name, requester_email: email, company, category, subject, description: body, urgency: 'normal', status: 'pending_review', source: 'landing_page' })
+    if (error) return NextResponse.json({ error: 'Não foi possível registrar a solicitação.' }, { status: 500 })
+  }
+  return NextResponse.json({ ok: true })
+}
