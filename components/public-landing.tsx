@@ -24,7 +24,7 @@ export function PublicLanding() {
       <div className="landing-orb landing-orb-one pointer-events-none absolute -right-40 top-0 size-[34rem] rounded-full blur-3xl" />
       <div className="landing-orb landing-orb-two pointer-events-none absolute left-[-18rem] top-[32rem] size-[30rem] rounded-full blur-3xl" />
       <div className="relative mx-auto max-w-7xl px-5 sm:px-8 lg:px-12">
-        <header className="flex h-20 items-center justify-between border-b border-white/[0.08]">
+        <header className="flex min-h-20 items-center justify-between gap-3 border-b border-white/[0.08] py-3">
           <Link href="/" aria-label="Codexa — início" className="flex items-center gap-3">
             <Image src="/codexa-logo.png" alt="Codexa" width={92} height={92} priority className="size-14 object-contain" />
             <span className="hidden border-l border-white/15 pl-3 text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500 sm:block">Software house</span>
@@ -34,17 +34,17 @@ export function PublicLanding() {
             <a href="#portfolio" className="transition-colors hover:text-white">Portfólio</a>
             <a href="#metodo" className="transition-colors hover:text-white">Nosso método</a>
           </nav>
-          <a href="#contato" className="group inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/[0.04] px-4 py-2 text-xs font-semibold text-white transition hover:border-cyan-300/50 hover:bg-white/[0.08]">
+          <a href="#contato" className="group inline-flex shrink-0 items-center gap-2 rounded-full border border-white/15 bg-white/[0.04] px-3 py-2 text-[11px] font-semibold text-white transition hover:border-cyan-300/50 hover:bg-white/[0.08] sm:px-4 sm:text-xs">
             Vamos conversar <ArrowUpRight className="size-3.5 transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5" />
           </a>
         </header>
 
-        <section className="grid min-h-[650px] items-center gap-14 py-20 lg:grid-cols-[1.05fr_0.95fr] lg:py-24">
+        <section className="grid min-h-0 items-center gap-12 py-16 sm:py-20 lg:min-h-[650px] lg:grid-cols-[1.05fr_0.95fr] lg:py-24">
           <div className="max-w-3xl">
             <div className="mb-7 inline-flex items-center gap-2 rounded-full border border-cyan-300/20 bg-cyan-300/[0.06] px-3 py-1.5 text-[11px] font-medium uppercase tracking-[0.13em] text-cyan-200">
               <Sparkles className="size-3.5" /> Engenharia para negócios ambiciosos
             </div>
-            <h1 className="max-w-4xl text-5xl font-semibold leading-[0.98] tracking-[-0.055em] text-white sm:text-7xl lg:text-[5.8rem]">Ideias fortes merecem uma presença <span className="landing-gradient-text">à altura.</span></h1>
+            <h1 className="max-w-4xl text-[2.65rem] font-semibold leading-[1.02] tracking-[-0.055em] text-white sm:text-7xl lg:text-[5.8rem]">Ideias fortes merecem uma presença <span className="landing-gradient-text">à altura.</span></h1>
             <p className="mt-8 max-w-xl text-base leading-7 text-slate-400 sm:text-lg">A Codexa cria sites, sistemas e automações que ajudam negócios ambiciosos a vender melhor, operar com clareza e crescer com tecnologia.</p>
             <div className="mt-9 flex flex-wrap items-center gap-3">
               <a href="#contato" className="group inline-flex items-center gap-3 rounded-full bg-cyan-300 px-5 py-3 text-sm font-semibold text-[#071016] transition hover:bg-cyan-200">Comece um projeto <ArrowUpRight className="size-4 transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5" /></a>
@@ -58,7 +58,7 @@ export function PublicLanding() {
             <div className="relative grid gap-3 sm:grid-cols-2">
               <div className="rounded-3xl border border-cyan-300/25 bg-gradient-to-br from-cyan-300/[0.16] to-white/[0.03] p-6 shadow-2xl shadow-cyan-950/30">
                 <Code2 className="size-6 text-cyan-200" />
-                <p className="mt-16 text-xs font-semibold uppercase tracking-[0.16em] text-cyan-100">Web design</p>
+                <p className="mt-10 text-xs font-semibold uppercase tracking-[0.16em] text-cyan-100 sm:mt-16">Web design</p>
                 <p className="mt-3 text-xl font-semibold leading-tight text-white">Uma presença digital que trabalha por você.</p>
               </div>
               <div className="mt-8 rounded-3xl border border-violet-300/20 bg-gradient-to-br from-violet-300/[0.15] to-white/[0.03] p-6 sm:mt-16">
