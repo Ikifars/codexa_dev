@@ -8,13 +8,15 @@ export async function GET(request: Request) {
   const sector = new URL(request.url).searchParams.get('sector') ?? ''
   if (!sectors.has(sector)) return NextResponse.json({ employees: [] })
   const supabase = createServiceClient()
-  const { data, error } = await supabase.from('team_members').select('id, display_name, full_name, role_name, status').eq('status', 'active')
+  const { data, error } = await supabase.from('team_members').select('id, full_name, role_name, status')
   if (error) return NextResponse.json({ error: 'Não foi possível carregar os destinatários.' }, { status: 500 })
+  const sectorRole = sector === 'Suporte Técnico' ? 'suporte' : sector === 'Operações' ? 'operacional' : sector.toLowerCase()
+  const activeStatuses = new Set(['active', 'ativo', 'enabled', 'habilitado'])
   const employees = (data ?? []).filter((member) => {
-    const role = String(member.role_name ?? '').toLowerCase()
-    const sectorRole = sector === 'Suporte Técnico' ? 'suporte' : sector === 'Operações' ? 'operacional' : sector.toLowerCase()
-    return role === sectorRole
-  }).map((member) => ({ id: member.id, name: member.display_name ?? member.full_name ?? 'Equipe Codexa', sector }))
+    const role = String(member.role_name ?? '').trim().toLowerCase()
+    const status = String(member.status ?? '').trim().toLowerCase().replaceAll('"', '')
+    return activeStatuses.has(status) && role === sectorRole
+  }).map((member) => ({ id: member.id, name: member.full_name ?? 'Equipe Codexa', sector }))
   return NextResponse.json({ employees })
 }
 
@@ -35,7 +37,8 @@ export async function POST(request: Request) {
     if (employeeId) {
       const { data } = await supabase.from('team_members').select('id, role_name, status').eq('id', employeeId).maybeSingle()
       const expectedRole = sector === 'Suporte Técnico' ? 'suporte' : sector === 'Operações' ? 'operacional' : sector.toLowerCase()
-      if (!data || data.status !== 'active' || String(data.role_name).toLowerCase() !== expectedRole) return NextResponse.json({ error: 'O destinatário não está disponível neste setor.' }, { status: 400 })
+      const normalizedStatus = String(data?.status ?? '').trim().toLowerCase().replaceAll('"', '')
+      if (!data || !['active', 'ativo', 'enabled', 'habilitado'].includes(normalizedStatus) || String(data.role_name ?? '').trim().toLowerCase() !== expectedRole) return NextResponse.json({ error: 'O destinatário não está disponível neste setor.' }, { status: 400 })
     }
     const { error } = await supabase.from('public_contact_messages').insert({ sender_name: name, sender_email: email, company, sector, employee_id: employeeId, subject, body, source: 'landing_page' })
     if (error) return NextResponse.json({ error: 'Não foi possível registrar a mensagem.' }, { status: 500 })
