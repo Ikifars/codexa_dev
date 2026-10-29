@@ -19,7 +19,7 @@ import { createClient } from '@/lib/supabase/client'
 import { hasWorkspaceAccess } from '@/lib/workspace-access'
 import { applyWorkspaceTheme, getWorkspaceThemePreference } from '@/lib/workspace-theme'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faChartLine, faUserPlus, faUsers, faAddressBook, faFileSignature, faFileContract, faDiagramProject, faListCheck, faCodePullRequest, faHeadset, faServer, faPuzzlePiece, faLayerGroup, faKey, faArrowTrendUp, faArrowTrendDown, faChartPie, faUserShield, faUserGear, faShieldHalved, faClockRotateLeft, faUserCircle, faPalette, faGear } from '@fortawesome/free-solid-svg-icons'
+import { faChartLine, faUserPlus, faUsers, faAddressBook, faFileSignature, faFileContract, faDiagramProject, faListCheck, faCodePullRequest, faHeadset, faServer, faPuzzlePiece, faLayerGroup, faKey, faArrowTrendUp, faArrowTrendDown, faChartPie, faUserShield, faUserGear, faShieldHalved, faClockRotateLeft, faUserCircle, faPalette, faGear, faMedal, faTrophy } from '@fortawesome/free-solid-svg-icons'
 import {
   Activity,
   Bell,
@@ -86,7 +86,8 @@ const navigationGroups = [
     { label: 'Equipe', icon: faUsers },
     { label: 'Usuários', icon: faUserGear },
     { label: 'Papéis e permissões', icon: faUserShield },
-    { label: 'Auditoria', icon: faClockRotateLeft },
+    { label: 'Emblemas', icon: faMedal },
+    { label: 'Auditoria', icon: faClockRotateLeft }
   ] },
   { label: 'Conta', items: [
     { label: 'Meu perfil', icon: faUserCircle },
@@ -101,7 +102,7 @@ const sectionSlugs: Record<string, string> = {
   Projetos: 'projetos', Tarefas: 'tarefas', 'Solicitações de alteração': 'solicitacoes', Suporte: 'suporte', 'Sistemas dos clientes': 'sistemas',
   Módulos: 'modulos', Planos: 'planos', Licenças: 'licencas', 'Contas a receber': 'contas-a-receber', 'Contas a pagar': 'contas-a-pagar',
   'Fluxo de caixa': 'fluxo-de-caixa', Transações: 'transacoes', 'Categorias financeiras': 'categorias-financeiras', Relatórios: 'relatorios', Equipe: 'equipe',
-  Usuários: 'usuarios', 'Papéis e permissões': 'papeis-e-permissoes', 'Meu perfil': 'meu-perfil', 'Meu histórico': 'meu-historico', Configurações: 'configuracoes', Aparência: 'aparencia', Auditoria: 'auditoria',
+  Usuários: 'usuarios', 'Papéis e permissões': 'papeis-e-permissoes', Emblemas: 'emblemas', 'Meu perfil': 'meu-perfil', 'Meu histórico': 'meu-historico', Configurações: 'configuracoes', Aparência: 'aparencia', Auditoria: 'auditoria',
 }
 
 const metrics = [
@@ -128,6 +129,8 @@ const toneClasses: Record<string, string> = {
 
 type WorkspaceNotification = { id: string; message: string; notification_type: string; entity_type?: string | null; entity_id?: string | null; link_path?: string | null; read_at: string | null; created_at: string }
 type SearchItem = { label: string; slug: string; group: string }
+type DashboardRankingMember = { id: string; full_name: string; role_name: string; xp: number; level: number }
+type DashboardData = { team: number; messages: number; ranking: DashboardRankingMember[] }
 
 function DashboardContent({ initialSection = 'Dashboard', page, permissions, profileName = '' }: { initialSection?: string; page?: ReactNode; permissions: string[]; profileName?: string }) {
   const router = useRouter()
@@ -142,6 +145,7 @@ function DashboardContent({ initialSection = 'Dashboard', page, permissions, pro
   const [notificationsLoading, setNotificationsLoading] = useState(false)
   const [notificationsError, setNotificationsError] = useState('')
   const [actionableNotificationIds, setActionableNotificationIds] = useState<string[]>([])
+  const [dashboardData, setDashboardData] = useState<DashboardData>({ team: 0, messages: 0, ranking: [] })
   const searchInput = useRef<HTMLInputElement>(null)
   const displayName = profileName.trim() || 'Usuário'
   const initials = displayName.split(/\s+/).slice(0, 2).map((part) => part[0]).join('').toUpperCase()
@@ -160,6 +164,15 @@ function DashboardContent({ initialSection = 'Dashboard', page, permissions, pro
     colorScheme.addEventListener('change', onSystemThemeChange)
     return () => colorScheme.removeEventListener('change', onSystemThemeChange)
   }, [])
+
+  useEffect(() => {
+    if (activeSection !== 'Dashboard') return
+    void fetch('/api/workspace/dashboard', { cache: 'no-store' }).then(async (response) => {
+      if (!response.ok) return
+      const data = await response.json() as { metrics?: { team?: number; messages?: number }; ranking?: DashboardRankingMember[] }
+      setDashboardData({ team: data.metrics?.team ?? 0, messages: data.metrics?.messages ?? 0, ranking: data.ranking ?? [] })
+    })
+  }, [activeSection])
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -353,7 +366,7 @@ function DashboardContent({ initialSection = 'Dashboard', page, permissions, pro
           </div>
         </header>
         <main className="workspace-main mx-auto w-full max-w-[1500px] overflow-x-hidden px-3 py-5 sm:px-7 sm:py-7 lg:px-9">{page ?? <>{activeSection === 'Dashboard' &&         <div id="dashboard-overview" className="scroll-mt-24"><div className="mb-8 flex flex-col justify-between gap-5 sm:flex-row sm:items-end"><div><p className="mb-2 text-xs font-medium uppercase tracking-[0.16em] text-blue-400">Visão geral</p><h1 className="text-2xl font-semibold tracking-tight text-white sm:text-[28px]">Olá, {displayName}</h1><p className="mt-1.5 text-sm text-slate-500">Acompanhe as áreas permitidas para você.</p></div>{permissions.includes('*') && <button className="flex w-fit items-center gap-2 rounded-lg bg-blue-500 px-3.5 py-2.5 text-xs font-semibold text-white shadow-lg shadow-blue-500/15 transition-colors hover:bg-blue-400"><Plus className="size-4" />Adicionar registro</button>}</div>
-          <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">{metrics.filter((metric) => {
+          <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">{metrics.map((metric) => ({ ...metric, value: metric.label === 'Clientes ativos' ? String(dashboardData.team) : metric.label === 'Chamados abertos' ? String(dashboardData.messages) : metric.value, hint: metric.label === 'Clientes ativos' ? 'Membros ativos no workspace' : metric.label === 'Chamados abertos' ? 'Mensagens novas para triagem' : metric.hint })).filter((metric) => {
             const metricPermission: Record<string, string> = {
               'Leads ativos': 'leads:view', 'Clientes ativos': 'clients:view', 'Projetos em andamento': 'projects:view',
               'Chamados abertos': 'support:view', 'Contratos ativos': 'contracts:view',
@@ -363,6 +376,7 @@ function DashboardContent({ initialSection = 'Dashboard', page, permissions, pro
             return permissions.includes('*') || permissions.includes(metricPermission[metric.label])
           }).map((metric) => { const icon = metric.icon; return <article key={metric.label} className="rounded-xl border border-white/[0.07] bg-[#11161e] p-4 transition-colors hover:border-white/[0.12]"><div className="flex items-start justify-between"><div className={`grid size-9 place-items-center rounded-lg ${toneClasses[metric.tone]}`}><FontAwesomeIcon icon={icon} className="size-4" /></div><button aria-label={`Mais opções de ${metric.label}`} className="text-slate-600 hover:text-slate-300"><MoreHorizontal className="size-4" /></button></div><p className="mt-4 text-xs text-slate-500">{metric.label}</p><p className="mt-1 text-xl font-semibold tracking-tight text-slate-100">{metric.value}</p><p className="mt-1 text-[11px] text-slate-600">{metric.hint}</p></article> })}</section>
           <section className="mt-6 grid gap-6 xl:grid-cols-[1.45fr_1fr]"><div className="rounded-xl border border-white/[0.07] bg-[#11161e]"><div className="flex items-center justify-between border-b border-white/[0.07] px-5 py-4"><div><h2 className="text-sm font-semibold text-slate-200">Atividade recente</h2><p className="mt-0.5 text-xs text-slate-500">Acompanhe as últimas ações do workspace</p></div><button className="text-xs font-medium text-blue-400 hover:text-blue-300">Ver histórico</button></div><div className="flex min-h-[220px] flex-col items-center justify-center px-6 text-center"><div className="mb-3 grid size-11 place-items-center rounded-full border border-white/[0.08] bg-white/[0.03]"><Activity className="size-5 text-slate-600" /></div><p className="text-sm font-medium text-slate-400">Nenhuma atividade registrada</p><p className="mt-1 max-w-xs text-xs leading-5 text-slate-600">As ações da sua equipe aparecerão aqui quando os primeiros registros forem criados.</p></div></div><div className="rounded-xl border border-white/[0.07] bg-[#11161e]"><div className="flex items-center justify-between border-b border-white/[0.07] px-5 py-4"><div><h2 className="text-sm font-semibold text-slate-200">Próximos vencimentos</h2><p className="mt-0.5 text-xs text-slate-500">Compromissos financeiros e contratuais</p></div><button className="text-slate-600 hover:text-slate-300" aria-label="Mais opções"><MoreHorizontal className="size-4" /></button></div><div className="flex min-h-[220px] flex-col items-center justify-center px-6 text-center"><div className="mb-3 grid size-11 place-items-center rounded-full border border-white/[0.08] bg-white/[0.03]"><WalletCards className="size-5 text-slate-600" /></div><p className="text-sm font-medium text-slate-400">Tudo em dia</p><p className="mt-1 max-w-xs text-xs leading-5 text-slate-600">Nenhum vencimento encontrado para os próximos dias.</p></div></div></section>
+          <section className="mt-6 rounded-xl border border-white/[0.07] bg-[#11161e]"><div className="flex items-center justify-between border-b border-white/[0.07] px-5 py-4"><div className="flex items-center gap-3"><div className="grid size-9 place-items-center rounded-lg bg-amber-400/10 text-amber-300"><FontAwesomeIcon icon={faTrophy} className="size-4" /></div><div><h2 className="text-sm font-semibold text-slate-200">Ranking da empresa</h2><p className="mt-0.5 text-xs text-slate-500">Evolução da equipe por XP e nível</p></div></div><span className="text-xs text-slate-500">Atualizado agora</span></div><div className="divide-y divide-white/[0.06]">{dashboardData.ranking.length ? dashboardData.ranking.map((member, index) => <div key={member.id} className="flex items-center gap-3 px-5 py-3"><span className={`grid size-7 place-items-center rounded-lg text-xs font-semibold ${index === 0 ? 'bg-amber-300/15 text-amber-200' : 'bg-white/[.04] text-slate-400'}`}>{index + 1}</span><div className="min-w-0 flex-1"><p className="truncate text-xs font-medium text-slate-200">{member.full_name}</p><p className="text-[10px] text-slate-500">{member.role_name} · nível {member.level}</p></div><span className="text-xs font-semibold text-cyan-300">{member.xp} XP</span></div>) : <div className="flex min-h-[150px] items-center justify-center px-6 text-center"><p className="text-xs text-slate-600">Adicione XP à equipe para formar o ranking.</p></div>}</div></section>
           <section className="mt-6 rounded-xl border border-white/[0.07] bg-[#11161e]"><div className="flex items-center justify-between border-b border-white/[0.07] px-5 py-4"><div><h2 className="text-sm font-semibold text-slate-200">Projetos por status</h2><p className="mt-0.5 text-xs text-slate-500">Distribuição dos projetos ativos</p></div><button className="flex items-center gap-1 text-xs text-slate-500 hover:text-slate-300">Este mês <ChevronDown className="size-3.5" /></button></div><div className="flex min-h-[150px] items-center justify-center px-6 text-center"><p className="text-xs text-slate-600">Cadastre projetos para visualizar a distribuição por status.</p></div></section>
           </div>}
           {['Leads', 'Mensagens', 'Clientes'].includes(activeSection) && <div id="crm-workspace" className="scroll-mt-24"><CrmWorkspace initialModule={activeSection === 'Clientes' ? 'clients' : activeSection === 'Mensagens' ? 'messages' : 'leads'} permissions={permissions} /></div>}
@@ -376,7 +390,7 @@ function DashboardContent({ initialSection = 'Dashboard', page, permissions, pro
           {activeSection === 'Meu histórico' && <ActivityHistoryWorkspace permissions={permissions} mode="personal" />}
           {activeSection === 'Meu perfil' && <GamifiedProfileWorkspace initialName={profileName} />}
   {activeSection === 'Aparência' && <AccountWorkspace section={activeSection} initialName={profileName} />}
-          {!['Dashboard', 'Leads', 'Mensagens', 'Clientes', 'Propostas', 'Contratos', 'Projetos', 'Solicitações de alteração', 'Suporte', 'Sistemas', 'Módulos', 'Planos', 'Licenças', 'Financeiro', 'Equipe', 'Relatórios', 'Configurações', 'Auditoria', 'Meu histórico'].includes(activeSection) && <section className="rounded-xl border border-white/[0.07] bg-[#11161e] p-8"><p className="text-xs font-medium uppercase tracking-[0.16em] text-blue-400">Módulo</p><h1 className="mt-2 text-2xl font-semibold text-white">{activeSection}</h1><p className="mt-2 text-sm text-slate-500">Esta página está preparada para receber os registros deste módulo.</p></section>}
+          {!['Dashboard', 'Leads', 'Mensagens', 'Clientes', 'Propostas', 'Contratos', 'Projetos', 'Solicitações de alteração', 'Suporte', 'Sistemas', 'Módulos', 'Planos', 'Licenças', 'Financeiro', 'Equipe', 'Relatórios', 'Configurações', 'Auditoria', 'Meu histórico', 'Emblemas'].includes(activeSection) && <section className="rounded-xl border border-white/[0.07] bg-[#11161e] p-8"><p className="text-xs font-medium uppercase tracking-[0.16em] text-blue-400">Módulo</p><h1 className="mt-2 text-2xl font-semibold text-white">{activeSection}</h1><p className="mt-2 text-sm text-slate-500">Esta página está preparada para receber os registros deste módulo.</p></section>}
           </>}
           <div className="mt-7 flex items-center gap-2 text-[11px] text-slate-600"><div className="size-1.5 rounded-full bg-amber-400" />Supabase conectado · CRM pronto para seus primeiros registros.</div>
         </main>

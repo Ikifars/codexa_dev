@@ -6,6 +6,7 @@ import { OperationsWorkspace } from '@/components/operations-workspace'
 import { FinanceWorkspace } from '@/components/finance-workspace'
 import { AccountWorkspace } from '@/components/account-workspace'
 import { GamifiedProfileWorkspace } from '@/components/gamified-profile-workspace'
+import { BadgeManagementWorkspace } from '@/components/badge-management-workspace'
 import { CrmWorkspace } from '@/components/crm-workspace'
 import { AdminWorkspace } from '@/components/admin-workspace'
 import { LicenseWorkspace } from '@/components/license-workspace'
@@ -35,6 +36,7 @@ export function WorkspacePageRouter({ module, permissions, profileName }: { modu
   if (module === 'contas-a-pagar') return <FinanceWorkspace initialTab="payable" permissions={permissions} />
   if (module === 'fluxo-de-caixa' || module === 'transacoes' || module === 'categorias-financeiras') return <FinanceWorkspace initialTab="overview" permissions={permissions} />
   if (module === 'meu-perfil') return <GamifiedProfileWorkspace initialName={profileName} />
+  if (module === 'emblemas') return <BadgeManagementWorkspace />
   if (module === 'meu-historico') return <ActivityHistoryWorkspace permissions={permissions} mode="personal" />
   if (module === 'auditoria') return <ActivityHistoryWorkspace permissions={permissions} mode="audit" />
   if (module === 'aparencia') return <AccountWorkspace section="Aparência" />

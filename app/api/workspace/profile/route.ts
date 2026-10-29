@@ -13,10 +13,10 @@ export async function GET() {
     const actor = await getWorkspaceActor()
     const { data: authUser, error } = await actor.supabase.auth.admin.getUserById(actor.actorId)
     if (error || !authUser.user) throw new AdminApiError('Não foi possível carregar seu perfil.', 503)
-    const { data: member } = await actor.supabase.from('team_members').select('full_name, email, role_name').eq('id', actor.memberId).maybeSingle()
+    const { data: member } = await actor.supabase.from('team_members').select('full_name, email, role_name, xp, level').eq('id', actor.memberId).maybeSingle()
     const { data: badges } = await actor.supabase.from('profile_badges').select('id, name, description, color, granted_at').eq('member_id', actor.memberId).order('granted_at', { ascending: false })
     const metadata = authUser.user.user_metadata ?? {}
-    return NextResponse.json({ fullName: member?.full_name ?? metadata.full_name ?? '', nickname: metadata.nickname ?? '', avatarUrl: metadata.avatar_url ?? '', email: authUser.user.email ?? member?.email ?? '', role: member?.role_name ?? 'Membro', points: Number(metadata.profile_points ?? 720), level: Number(metadata.profile_level ?? 4), badges: badges ?? [] })
+    return NextResponse.json({ fullName: member?.full_name ?? metadata.full_name ?? '', nickname: metadata.nickname ?? '', avatarUrl: metadata.avatar_url ?? '', email: authUser.user.email ?? member?.email ?? '', role: member?.role_name ?? 'Membro', points: Number(member?.xp ?? metadata.profile_points ?? 0), level: Number(member?.level ?? metadata.profile_level ?? 1), badges: badges ?? [] })
   } catch (error) { return fail(error) }
 }
 
