@@ -18,6 +18,8 @@ import { AuthScreen } from '@/components/auth-screen'
 import { createClient } from '@/lib/supabase/client'
 import { hasWorkspaceAccess } from '@/lib/workspace-access'
 import { applyWorkspaceTheme, getWorkspaceThemePreference } from '@/lib/workspace-theme'
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
+import { faChartLine, faUserPlus, faUsers, faAddressBook, faFileSignature, faFileContract, faDiagramProject, faListCheck, faCodePullRequest, faHeadset, faServer, faPuzzlePiece, faLayerGroup, faKey, faArrowTrendUp, faArrowTrendDown, faChartPie, faUserShield, faUserGear, faShieldHalved, faClockRotateLeft, faUserCircle, faPalette, faGear } from '@fortawesome/free-solid-svg-icons'
 import {
   Activity,
   Bell,
@@ -50,47 +52,47 @@ import {
 } from 'lucide-react'
 
 const navigationGroups = [
-  { label: 'Workspace', items: [{ label: 'Dashboard', icon: LayoutDashboard }] },
+  { label: 'Workspace', items: [{ label: 'Dashboard', icon: faChartLine }] },
   { label: 'Relacionamento', items: [
-    { label: 'Leads', icon: Inbox },
-    { label: 'Clientes', icon: Building2 },
-    { label: 'Contatos', icon: Users },
+    { label: 'Leads', icon: faUserPlus },
+    { label: 'Clientes', icon: faUsers },
+    { label: 'Contatos', icon: faAddressBook },
   ] },
   { label: 'Comercial', items: [
-    { label: 'Propostas', icon: FileText },
-    { label: 'Contratos', icon: BriefcaseBusiness },
+    { label: 'Propostas', icon: faFileSignature },
+    { label: 'Contratos', icon: faFileContract },
   ] },
   { label: 'Operações', items: [
-    { label: 'Projetos', icon: FolderKanban },
-    { label: 'Tarefas', icon: ClipboardList },
-    { label: 'Solicitações de alteração', icon: ClipboardList },
-    { label: 'Suporte', icon: Headphones },
+    { label: 'Projetos', icon: faDiagramProject },
+    { label: 'Tarefas', icon: faListCheck },
+    { label: 'Solicitações de alteração', icon: faCodePullRequest },
+    { label: 'Suporte', icon: faHeadset },
   ] },
   { label: 'Produtos', items: [
-    { label: 'Sistemas dos clientes', icon: Gauge },
-    { label: 'Módulos', icon: PanelsTopLeft },
-    { label: 'Planos', icon: WalletCards },
-    { label: 'Licenças', icon: ShieldCheck },
+    { label: 'Sistemas dos clientes', icon: faServer },
+    { label: 'Módulos', icon: faPuzzlePiece },
+    { label: 'Planos', icon: faLayerGroup },
+    { label: 'Licenças', icon: faKey },
   ] },
   { label: 'Financeiro', items: [
-    { label: 'Contas a receber', icon: CircleDollarSign },
-    { label: 'Contas a pagar', icon: CircleDollarSign },
-    { label: 'Fluxo de caixa', icon: CircleDollarSign },
-    { label: 'Transações', icon: CircleDollarSign },
-    { label: 'Categorias financeiras', icon: CircleDollarSign },
+    { label: 'Contas a receber', icon: faArrowTrendUp },
+    { label: 'Contas a pagar', icon: faArrowTrendDown },
+    { label: 'Fluxo de caixa', icon: faChartLine },
+    { label: 'Transações', icon: faArrowTrendUp },
+    { label: 'Categorias financeiras', icon: faChartPie },
   ] },
   { label: 'Administração', items: [
-    { label: 'Relatórios', icon: Activity },
-    { label: 'Equipe', icon: Users },
-    { label: 'Usuários', icon: Users },
-    { label: 'Papéis e permissões', icon: ShieldCheck },
-    { label: 'Auditoria', icon: Activity },
+    { label: 'Relatórios', icon: faChartPie },
+    { label: 'Equipe', icon: faUsers },
+    { label: 'Usuários', icon: faUserGear },
+    { label: 'Papéis e permissões', icon: faUserShield },
+    { label: 'Auditoria', icon: faClockRotateLeft },
   ] },
   { label: 'Conta', items: [
-    { label: 'Meu perfil', icon: Users },
-    { label: 'Meu histórico', icon: Activity },
-    { label: 'Configurações', icon: Settings },
-    { label: 'Aparência', icon: PanelsTopLeft },
+    { label: 'Meu perfil', icon: faUserCircle },
+    { label: 'Meu histórico', icon: faClockRotateLeft },
+    { label: 'Configurações', icon: faGear },
+    { label: 'Aparência', icon: faPalette },
   ] },
 ]
 
@@ -103,14 +105,14 @@ const sectionSlugs: Record<string, string> = {
 }
 
 const metrics = [
-  { label: 'Leads ativos', value: '0', hint: 'Nenhum lead cadastrado', icon: Inbox, tone: 'blue' },
-  { label: 'Clientes ativos', value: '0', hint: 'Nenhum cliente cadastrado', icon: Building2, tone: 'violet' },
-  { label: 'Projetos em andamento', value: '0', hint: 'Nenhum projeto cadastrado', icon: FolderKanban, tone: 'cyan' },
-  { label: 'Chamados abertos', value: '0', hint: 'Nenhum chamado aberto', icon: Headphones, tone: 'amber' },
-  { label: 'Contratos ativos', value: '0', hint: 'Nenhum contrato cadastrado', icon: BriefcaseBusiness, tone: 'emerald' },
-  { label: 'Valores a receber', value: 'R$ 0,00', hint: 'Nenhum lançamento pendente', icon: CircleDollarSign, tone: 'teal' },
-  { label: 'Valores vencidos', value: 'R$ 0,00', hint: 'Nenhum lançamento vencido', icon: WalletCards, tone: 'rose' },
-  { label: 'Receita no mês', value: 'R$ 0,00', hint: 'Nenhum recebimento registrado', icon: CircleDollarSign, tone: 'indigo' },
+  { label: 'Leads ativos', value: '0', hint: 'Nenhum lead cadastrado', icon: faUserPlus, tone: 'blue' },
+  { label: 'Clientes ativos', value: '0', hint: 'Nenhum cliente cadastrado', icon: faUsers, tone: 'violet' },
+  { label: 'Projetos em andamento', value: '0', hint: 'Nenhum projeto cadastrado', icon: faDiagramProject, tone: 'cyan' },
+  { label: 'Chamados abertos', value: '0', hint: 'Nenhum chamado aberto', icon: faHeadset, tone: 'amber' },
+  { label: 'Contratos ativos', value: '0', hint: 'Nenhum contrato cadastrado', icon: faFileContract, tone: 'emerald' },
+  { label: 'Valores a receber', value: 'R$ 0,00', hint: 'Nenhum lançamento pendente', icon: faArrowTrendUp, tone: 'teal' },
+  { label: 'Valores vencidos', value: 'R$ 0,00', hint: 'Nenhum lançamento vencido', icon: faArrowTrendDown, tone: 'rose' },
+  { label: 'Receita no mês', value: 'R$ 0,00', hint: 'Nenhum recebimento registrado', icon: faChartLine, tone: 'indigo' },
 ]
 
 const toneClasses: Record<string, string> = {
@@ -306,9 +308,9 @@ function DashboardContent({ initialSection = 'Dashboard', page, permissions, pro
               {!collapsed && <p className="mb-1.5 px-3 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">{group.label}</p>}
               <div className="flex flex-col gap-0.5">
                 {visibleItems.map((item) => {
-                  const Icon = item.icon
+                  const icon = item.icon
                   const isActive = activeSection === item.label
-                  return <button key={item.label} onClick={() => openSection(item.label)} className={`group relative flex min-h-10 items-center gap-3 rounded-lg border-l-2 px-3 py-2 text-left text-[13px] transition-colors ${isActive ? 'border-blue-400 bg-blue-400/10 font-medium text-blue-200' : 'border-transparent text-slate-400 hover:bg-white/[0.04] hover:text-slate-100'} ${collapsed ? 'justify-center px-0' : ''}`} title={collapsed ? item.label : undefined} aria-current={isActive ? 'page' : undefined}><Icon className={`size-[17px] shrink-0 ${isActive ? 'text-blue-300' : 'text-slate-500 group-hover:text-slate-300'}`} />{!collapsed && <span className="truncate">{item.label}</span>}</button>
+                  return <button key={item.label} onClick={() => openSection(item.label)} className={`group relative flex min-h-10 items-center gap-3 rounded-lg border-l-2 px-3 py-2 text-left text-[13px] transition-colors ${isActive ? 'border-blue-400 bg-blue-400/10 font-medium text-blue-200' : 'border-transparent text-slate-400 hover:bg-white/[0.04] hover:text-slate-100'} ${collapsed ? 'justify-center px-0' : ''}`} title={collapsed ? item.label : undefined} aria-current={isActive ? 'page' : undefined}><FontAwesomeIcon icon={icon} className={`size-3.5 shrink-0 ${isActive ? 'text-blue-300' : 'text-slate-500 group-hover:text-slate-300'}`} />{!collapsed && <span className="truncate">{item.label}</span>}</button>
                 })}
               </div>
             </div>
@@ -359,7 +361,7 @@ function DashboardContent({ initialSection = 'Dashboard', page, permissions, pro
               'Receita no mês': 'finance:view',
             }
             return permissions.includes('*') || permissions.includes(metricPermission[metric.label])
-          }).map((metric) => { const Icon = metric.icon; return <article key={metric.label} className="rounded-xl border border-white/[0.07] bg-[#11161e] p-4 transition-colors hover:border-white/[0.12]"><div className="flex items-start justify-between"><div className={`grid size-9 place-items-center rounded-lg ${toneClasses[metric.tone]}`}><Icon className="size-[17px]" /></div><button aria-label={`Mais opções de ${metric.label}`} className="text-slate-600 hover:text-slate-300"><MoreHorizontal className="size-4" /></button></div><p className="mt-4 text-xs text-slate-500">{metric.label}</p><p className="mt-1 text-xl font-semibold tracking-tight text-slate-100">{metric.value}</p><p className="mt-1 text-[11px] text-slate-600">{metric.hint}</p></article> })}</section>
+          }).map((metric) => { const icon = metric.icon; return <article key={metric.label} className="rounded-xl border border-white/[0.07] bg-[#11161e] p-4 transition-colors hover:border-white/[0.12]"><div className="flex items-start justify-between"><div className={`grid size-9 place-items-center rounded-lg ${toneClasses[metric.tone]}`}><FontAwesomeIcon icon={icon} className="size-4" /></div><button aria-label={`Mais opções de ${metric.label}`} className="text-slate-600 hover:text-slate-300"><MoreHorizontal className="size-4" /></button></div><p className="mt-4 text-xs text-slate-500">{metric.label}</p><p className="mt-1 text-xl font-semibold tracking-tight text-slate-100">{metric.value}</p><p className="mt-1 text-[11px] text-slate-600">{metric.hint}</p></article> })}</section>
           <section className="mt-6 grid gap-6 xl:grid-cols-[1.45fr_1fr]"><div className="rounded-xl border border-white/[0.07] bg-[#11161e]"><div className="flex items-center justify-between border-b border-white/[0.07] px-5 py-4"><div><h2 className="text-sm font-semibold text-slate-200">Atividade recente</h2><p className="mt-0.5 text-xs text-slate-500">Acompanhe as últimas ações do workspace</p></div><button className="text-xs font-medium text-blue-400 hover:text-blue-300">Ver histórico</button></div><div className="flex min-h-[220px] flex-col items-center justify-center px-6 text-center"><div className="mb-3 grid size-11 place-items-center rounded-full border border-white/[0.08] bg-white/[0.03]"><Activity className="size-5 text-slate-600" /></div><p className="text-sm font-medium text-slate-400">Nenhuma atividade registrada</p><p className="mt-1 max-w-xs text-xs leading-5 text-slate-600">As ações da sua equipe aparecerão aqui quando os primeiros registros forem criados.</p></div></div><div className="rounded-xl border border-white/[0.07] bg-[#11161e]"><div className="flex items-center justify-between border-b border-white/[0.07] px-5 py-4"><div><h2 className="text-sm font-semibold text-slate-200">Próximos vencimentos</h2><p className="mt-0.5 text-xs text-slate-500">Compromissos financeiros e contratuais</p></div><button className="text-slate-600 hover:text-slate-300" aria-label="Mais opções"><MoreHorizontal className="size-4" /></button></div><div className="flex min-h-[220px] flex-col items-center justify-center px-6 text-center"><div className="mb-3 grid size-11 place-items-center rounded-full border border-white/[0.08] bg-white/[0.03]"><WalletCards className="size-5 text-slate-600" /></div><p className="text-sm font-medium text-slate-400">Tudo em dia</p><p className="mt-1 max-w-xs text-xs leading-5 text-slate-600">Nenhum vencimento encontrado para os próximos dias.</p></div></div></section>
           <section className="mt-6 rounded-xl border border-white/[0.07] bg-[#11161e]"><div className="flex items-center justify-between border-b border-white/[0.07] px-5 py-4"><div><h2 className="text-sm font-semibold text-slate-200">Projetos por status</h2><p className="mt-0.5 text-xs text-slate-500">Distribuição dos projetos ativos</p></div><button className="flex items-center gap-1 text-xs text-slate-500 hover:text-slate-300">Este mês <ChevronDown className="size-3.5" /></button></div><div className="flex min-h-[150px] items-center justify-center px-6 text-center"><p className="text-xs text-slate-600">Cadastre projetos para visualizar a distribuição por status.</p></div></section>
           </div>}
