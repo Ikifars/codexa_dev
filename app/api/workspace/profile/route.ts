@@ -8,30 +8,40 @@ function fail(error: unknown) {
   return NextResponse.json({ error: 'Não foi possível atualizar seu perfil.' }, { status: 500 })
 }
 
+export async function GET() {
+  try {
+    const actor = await getWorkspaceActor()
+    const { data: authUser, error } = await actor.supabase.auth.admin.getUserById(actor.actorId)
+    if (error || !authUser.user) throw new AdminApiError('Não foi possível carregar seu perfil.', 503)
+    const { data: member } = await actor.supabase.from('team_members').select('full_name, email, role_name').eq('id', actor.memberId).maybeSingle()
+    const { data: badges } = await actor.supabase.from('profile_badges').select('id, name, description, color, granted_at').eq('member_id', actor.memberId).order('granted_at', { ascending: false })
+    const metadata = authUser.user.user_metadata ?? {}
+    return NextResponse.json({ fullName: member?.full_name ?? metadata.full_name ?? '', nickname: metadata.nickname ?? '', avatarUrl: metadata.avatar_url ?? '', email: authUser.user.email ?? member?.email ?? '', role: member?.role_name ?? 'Membro', points: Number(metadata.profile_points ?? 720), level: Number(metadata.profile_level ?? 4), badges: badges ?? [] })
+  } catch (error) { return fail(error) }
+}
+
 export async function PATCH(request: Request) {
-  let body: { fullName?: unknown }
+  let body: { fullName?: unknown; nickname?: unknown; avatarUrl?: unknown }
   try {
     body = await request.json() as { fullName?: unknown }
   } catch {
     return NextResponse.json({ error: 'Corpo da solicitação inválido.' }, { status: 400 })
   }
 
-  if (typeof body.fullName !== 'string' || body.fullName.trim().length < 2 || body.fullName.trim().length > 200) {
-    return NextResponse.json({ error: 'Informe um nome entre 2 e 200 caracteres.' }, { status: 400 })
-  }
+  if (typeof body.fullName !== 'string' || body.fullName.trim().length < 2 || body.fullName.trim().length > 200) return NextResponse.json({ error: 'Informe um nome entre 2 e 200 caracteres.' }, { status: 400 })
+  if (body.nickname !== undefined && (typeof body.nickname !== 'string' || body.nickname.trim().length > 40)) return NextResponse.json({ error: 'O apelido deve ter até 40 caracteres.' }, { status: 400 })
+  if (body.avatarUrl !== undefined && (typeof body.avatarUrl !== 'string' || (body.avatarUrl.trim() && !/^https:\/\//i.test(body.avatarUrl.trim())))) return NextResponse.json({ error: 'A foto deve usar uma URL HTTPS válida.' }, { status: 400 })
 
   try {
     const actor = await getWorkspaceActor()
-    const fullName = body.fullName.trim()
     const { data: authUser, error: authLookupError } = await actor.supabase.auth.admin.getUserById(actor.actorId)
-    if (authLookupError || !authUser.user) {
-      console.error('Workspace profile auth lookup failed:', authLookupError?.message ?? 'User not found')
-      throw new AdminApiError('Não foi possível localizar sua conta.', 503)
-    }
-
+    if (authLookupError || !authUser.user) throw new AdminApiError('Não foi possível localizar sua conta.', 503)
     const previousMetadata = authUser.user.user_metadata ?? {}
+    const fullName = body.fullName.trim()
+    const nickname = typeof body.nickname === 'string' ? body.nickname.trim() : String(previousMetadata.nickname ?? '')
+    const avatarUrl = typeof body.avatarUrl === 'string' ? body.avatarUrl.trim() : String(previousMetadata.avatar_url ?? '')
     const { error: authUpdateError } = await actor.supabase.auth.admin.updateUserById(actor.actorId, {
-      user_metadata: { ...previousMetadata, display_name: fullName, full_name: fullName },
+      user_metadata: { ...previousMetadata, display_name: fullName, full_name: fullName, nickname, avatar_url: avatarUrl },
     })
     if (authUpdateError) {
       console.error('Workspace profile auth update failed:', authUpdateError.message)

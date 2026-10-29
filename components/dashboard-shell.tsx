@@ -13,6 +13,7 @@ import { AdminWorkspace } from '@/components/admin-workspace'
 import { ReportsWorkspace } from '@/components/reports-workspace'
 import { ActivityHistoryWorkspace } from '@/components/activity-history-workspace'
 import { AccountWorkspace } from '@/components/account-workspace'
+import { GamifiedProfileWorkspace } from '@/components/gamified-profile-workspace'
 import { AuthScreen } from '@/components/auth-screen'
 import { createClient } from '@/lib/supabase/client'
 import { hasWorkspaceAccess } from '@/lib/workspace-access'
@@ -371,7 +372,8 @@ function DashboardContent({ initialSection = 'Dashboard', page, permissions, pro
           {['Equipe', 'Configurações'].includes(activeSection) && <div id="admin-workspace" className="scroll-mt-24"><AdminWorkspace section={activeSection} permissions={permissions} /></div>}
           {activeSection === 'Auditoria' && <ActivityHistoryWorkspace permissions={permissions} mode="audit" />}
           {activeSection === 'Meu histórico' && <ActivityHistoryWorkspace permissions={permissions} mode="personal" />}
-          {['Meu perfil', 'Aparência'].includes(activeSection) && <AccountWorkspace section={activeSection} initialName={profileName} />}
+          {activeSection === 'Meu perfil' && <GamifiedProfileWorkspace initialName={profileName} />}
+  {activeSection === 'Aparência' && <AccountWorkspace section={activeSection} initialName={profileName} />}
           {!['Dashboard', 'Leads', 'Mensagens', 'Clientes', 'Propostas', 'Contratos', 'Projetos', 'Solicitações de alteração', 'Suporte', 'Sistemas', 'Módulos', 'Planos', 'Licenças', 'Financeiro', 'Equipe', 'Relatórios', 'Configurações', 'Auditoria', 'Meu histórico'].includes(activeSection) && <section className="rounded-xl border border-white/[0.07] bg-[#11161e] p-8"><p className="text-xs font-medium uppercase tracking-[0.16em] text-blue-400">Módulo</p><h1 className="mt-2 text-2xl font-semibold text-white">{activeSection}</h1><p className="mt-2 text-sm text-slate-500">Esta página está preparada para receber os registros deste módulo.</p></section>}
           </>}
           <div className="mt-7 flex items-center gap-2 text-[11px] text-slate-600"><div className="size-1.5 rounded-full bg-amber-400" />Supabase conectado · CRM pronto para seus primeiros registros.</div>
