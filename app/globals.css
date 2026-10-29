@@ -347,6 +347,7 @@
 }
 
 .landing-page {
+  overflow-x: clip;
   background-image: radial-gradient(circle at 50% -10%, rgb(45 191 224 / 10%), transparent 34rem), linear-gradient(180deg, #07090d 0%, #080b10 55%, #07090d 100%);
 }
 

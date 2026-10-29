@@ -19,7 +19,7 @@ const portfolio = [
 
 export function PublicLanding() {
   return (
-    <main className="landing-page min-h-screen overflow-hidden bg-[#07090d] text-slate-100">
+    <main className="landing-page relative min-h-screen overflow-x-clip overflow-y-hidden bg-[#07090d] text-slate-100">
       <div className="landing-grid pointer-events-none absolute inset-0 opacity-70" />
       <div className="landing-orb landing-orb-one pointer-events-none absolute -right-40 top-0 size-[34rem] rounded-full blur-3xl" />
       <div className="landing-orb landing-orb-two pointer-events-none absolute left-[-18rem] top-[32rem] size-[30rem] rounded-full blur-3xl" />
