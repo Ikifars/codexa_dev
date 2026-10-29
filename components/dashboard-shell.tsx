@@ -130,7 +130,7 @@ const toneClasses: Record<string, string> = {
 type WorkspaceNotification = { id: string; message: string; notification_type: string; entity_type?: string | null; entity_id?: string | null; link_path?: string | null; read_at: string | null; created_at: string }
 type SearchItem = { label: string; slug: string; group: string }
 type DashboardRankingMember = { id: string; full_name: string; role_name: string; xp: number; level: number }
-type DashboardData = { team: number; messages: number; ranking: DashboardRankingMember[] }
+type DashboardData = { team: number; clients: number; projects: number; tickets: number; contracts: number; messages: number; ranking: DashboardRankingMember[] }
 
 function DashboardContent({ initialSection = 'Dashboard', page, permissions, profileName = '' }: { initialSection?: string; page?: ReactNode; permissions: string[]; profileName?: string }) {
   const router = useRouter()
@@ -145,7 +145,7 @@ function DashboardContent({ initialSection = 'Dashboard', page, permissions, pro
   const [notificationsLoading, setNotificationsLoading] = useState(false)
   const [notificationsError, setNotificationsError] = useState('')
   const [actionableNotificationIds, setActionableNotificationIds] = useState<string[]>([])
-  const [dashboardData, setDashboardData] = useState<DashboardData>({ team: 0, messages: 0, ranking: [] })
+  const [dashboardData, setDashboardData] = useState<DashboardData>({ team: 0, clients: 0, projects: 0, tickets: 0, contracts: 0, messages: 0, ranking: [] })
   const searchInput = useRef<HTMLInputElement>(null)
   const displayName = profileName.trim() || 'Usuário'
   const initials = displayName.split(/\s+/).slice(0, 2).map((part) => part[0]).join('').toUpperCase()
@@ -169,8 +169,8 @@ function DashboardContent({ initialSection = 'Dashboard', page, permissions, pro
     if (activeSection !== 'Dashboard') return
     void fetch('/api/workspace/dashboard', { cache: 'no-store' }).then(async (response) => {
       if (!response.ok) return
-      const data = await response.json() as { metrics?: { team?: number; messages?: number }; ranking?: DashboardRankingMember[] }
-      setDashboardData({ team: data.metrics?.team ?? 0, messages: data.metrics?.messages ?? 0, ranking: data.ranking ?? [] })
+      const data = await response.json() as { metrics?: { team?: number; clients?: number; projects?: number; tickets?: number; contracts?: number; messages?: number }; ranking?: DashboardRankingMember[] }
+      setDashboardData({ team: data.metrics?.team ?? 0, clients: data.metrics?.clients ?? 0, projects: data.metrics?.projects ?? 0, tickets: data.metrics?.tickets ?? 0, contracts: data.metrics?.contracts ?? 0, messages: data.metrics?.messages ?? 0, ranking: data.ranking ?? [] })
     })
   }, [activeSection])
 
@@ -366,7 +366,7 @@ function DashboardContent({ initialSection = 'Dashboard', page, permissions, pro
           </div>
         </header>
         <main className="workspace-main mx-auto w-full max-w-[1500px] overflow-x-hidden px-3 py-5 sm:px-7 sm:py-7 lg:px-9">{page ?? <>{activeSection === 'Dashboard' &&         <div id="dashboard-overview" className="scroll-mt-24"><div className="mb-8 flex flex-col justify-between gap-5 sm:flex-row sm:items-end"><div><p className="mb-2 text-xs font-medium uppercase tracking-[0.16em] text-blue-400">Visão geral</p><h1 className="text-2xl font-semibold tracking-tight text-white sm:text-[28px]">Olá, {displayName}</h1><p className="mt-1.5 text-sm text-slate-500">Acompanhe as áreas permitidas para você.</p></div>{permissions.includes('*') && <button className="flex w-fit items-center gap-2 rounded-lg bg-blue-500 px-3.5 py-2.5 text-xs font-semibold text-white shadow-lg shadow-blue-500/15 transition-colors hover:bg-blue-400"><Plus className="size-4" />Adicionar registro</button>}</div>
-          <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">{metrics.map((metric) => ({ ...metric, value: metric.label === 'Clientes ativos' ? String(dashboardData.team) : metric.label === 'Chamados abertos' ? String(dashboardData.messages) : metric.value, hint: metric.label === 'Clientes ativos' ? 'Membros ativos no workspace' : metric.label === 'Chamados abertos' ? 'Mensagens novas para triagem' : metric.hint })).filter((metric) => {
+          <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">{metrics.map((metric) => ({ ...metric, value: metric.label === 'Clientes ativos' ? String(dashboardData.clients) : metric.label === 'Projetos em andamento' ? String(dashboardData.projects) : metric.label === 'Chamados abertos' ? String(dashboardData.tickets) : metric.label === 'Contratos ativos' ? String(dashboardData.contracts) : metric.value, hint: metric.label === 'Clientes ativos' ? 'Membros ativos no workspace' : metric.label === 'Chamados abertos' ? 'Mensagens novas para triagem' : metric.hint })).filter((metric) => {
             const metricPermission: Record<string, string> = {
               'Leads ativos': 'leads:view', 'Clientes ativos': 'clients:view', 'Projetos em andamento': 'projects:view',
               'Chamados abertos': 'support:view', 'Contratos ativos': 'contracts:view',

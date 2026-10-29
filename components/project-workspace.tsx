@@ -244,6 +244,7 @@ export function ProjectWorkspace({ projectId, permissions }: { projectId: string
       setTasks(previousTasks)
       setError(updateError.message)
     } else {
+      if (isComplete(status) && !isComplete(task.status)) void fetch('/api/workspace/xp/award', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ actionKey: 'complete_task', entityType: 'task', entityId: task.id }) })
       setNotice(`Tarefa movida para ${status}.`)
       void loadData()
     }
@@ -298,6 +299,7 @@ export function ProjectWorkspace({ projectId, permissions }: { projectId: string
       return
     }
     setTaskModal({ open: false, task: null, status: 'Backlog' })
+    if (isComplete(String(data.get('status') ?? task.status)) && !isComplete(task.status)) void fetch('/api/workspace/xp/award', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ actionKey: 'complete_task', entityType: 'task', entityId: task.id }) })
     setNotice('Tarefa atualizada.')
     await loadData()
   }
@@ -325,12 +327,14 @@ export function ProjectWorkspace({ projectId, permissions }: { projectId: string
       return
     }
     setEditProjectOpen(false)
+    const nextStatus = String(data.get('status') ?? project.status)
+    if (isComplete(nextStatus) && !isComplete(project.status)) void fetch('/api/workspace/xp/award', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ actionKey: 'deliver_project', entityType: 'project', entityId: project.id }) })
     setNotice('Projeto atualizado.')
     await loadData()
   }
 
   async function archiveProject() {
-    if (!canEditProject || !project || !window.confirm(`Arquivar o projeto ���${project.name}”?`)) return
+    if (!canEditProject || !project || !window.confirm(`Arquivar o projeto �����${project.name}”?`)) return
     const { error: updateError } = await supabase.from('projects').update({ status: 'Arquivado' }).eq('id', project.id)
     if (updateError) {
       setError(updateError.message)

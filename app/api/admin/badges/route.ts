@@ -34,8 +34,8 @@ export async function POST(request: Request) {
       const upload = await actor.supabase.storage.from('private-documents').upload(imagePath, file, { contentType: file.type, upsert: false })
       if (upload.error) throw new AdminApiError('Não foi possível armazenar a imagem do emblema.', 503)
     }
-    const { data, error } = await actor.supabase.from('profile_badges').insert({ name, description, color, image_path: imagePath, granted_by: actor.memberId }).select('id,name,description,color,image_path,granted_at').single()
-    if (error || !data) throw new AdminApiError('Não foi possível criar o emblema.', 503)
+    const { data, error } = await actor.supabase.from('profile_badges').insert({ member_id: null, name, description, color, image_path: imagePath, granted_by: actor.memberId }).select('id,name,description,color,image_path,granted_at').single()
+    if (error || !data) { console.error('Badge insert failed:', error?.message); throw new AdminApiError('Não foi possível criar o emblema. A migração de emblemas precisa estar aplicada no Supabase.', 503) }
     return NextResponse.json({ badge: data }, { status: 201 })
   } catch (error) { return fail(error) }
 }
