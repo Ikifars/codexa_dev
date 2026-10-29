@@ -21,6 +21,7 @@ export const workspaceAccess: Record<string, string[]> = {
   equipe: ['team:view'],
   usuarios: ['users:manage_users'],
   'papeis-e-permissoes': ['roles:manage_roles'],
+  emblemas: ['badges:manage'],
   'meu-perfil': ['profile:view'],
   'meu-historico': ['projects:view'],
   configuracoes: ['settings:view'],

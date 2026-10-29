@@ -20,8 +20,14 @@ export async function POST(request: Request, context: { params: Promise<{ licens
     const form = await request.formData()
     const originalCode = String(form.get('originalCode') ?? '')
     if (!originalCode.trim()) throw new Error('Envie o código original de AdminClient.tsx.')
-    const mappingText = String(form.get('mapping') ?? '')
-    const mapping = mappingText ? JSON.parse(mappingText) as TabMapping[] : undefined
+    const mappingText = String(form.get('mapping') ?? '').trim()
+    let mapping: TabMapping[] | undefined
+    if (mappingText) {
+      let parsed: unknown
+      try { parsed = JSON.parse(mappingText) } catch { throw new Error('O mapeamento precisa ser um JSON válido.') }
+      if (!Array.isArray(parsed)) throw new Error('O mapeamento precisa ser uma lista JSON de objetos com tab e code.')
+      mapping = parsed as TabMapping[]
+    }
     const { data: license, error: licenseError } = await supabase.from('licenses').select('system_id').eq('id', licenseId).single()
     if (licenseError || !license) throw new Error('Licença não encontrada.')
     const { data: modules, error: modulesError } = await supabase.from('system_modules').select('internal_code,name').eq('system_id', license.system_id).order('internal_code')
