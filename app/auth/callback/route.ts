@@ -15,7 +15,7 @@ export async function GET(request: Request) {
       : '/workspace'
 
   const siteUrl =
-    process.env.NEXT_PUBLIC_SITE_URL || url.origin
+    process.env.SITE_URL || url.origin
 
   const redirectUrl = new URL(next, siteUrl)
 
