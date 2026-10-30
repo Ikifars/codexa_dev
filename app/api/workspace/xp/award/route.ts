@@ -2,8 +2,8 @@ import { NextResponse } from 'next/server'
 import { AdminApiError } from '@/lib/supabase/server-client'
 import { getWorkspaceActor } from '@/lib/supabase/workspace-auth'
 
-const actions = new Set(['resolve_ticket', 'complete_task', 'deliver_project', 'close_sale'])
-const entities = new Set(['support_ticket', 'task', 'project', 'sale'])
+const actions = new Set(['resolve_ticket', 'complete_task', 'complete_task_on_time', 'deliver_project', 'deliver_project_milestone', 'close_sale', 'close_contract', 'win_lead', 'create_task', 'resolve_support_ticket', 'approve_change_request', 'create_document', 'assign_badge', 'receive_positive_feedback', 'achieve_goal'])
+const entities = new Set(['support_ticket', 'task', 'project', 'sale', 'contract', 'lead', 'change_request', 'document', 'badge', 'feedback', 'goal'])
 export async function POST(request: Request) {
   try {
     const actor = await getWorkspaceActor()
