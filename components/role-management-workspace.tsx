@@ -55,6 +55,7 @@ const moduleGroups: Record<string, string> = {
   attachments: 'Documentos',
   notifications: 'Conta',
   calendar: 'Comercial',
+  badges: 'Gamificação',
 }
 
 const moduleLabels: Record<string, string> = {
@@ -65,7 +66,7 @@ const moduleLabels: Record<string, string> = {
   accounts_payable: 'Contas a pagar', finance: 'Financeiro', reports_commercial: 'Relatórios comerciais',
   reports_financial: 'Relatórios financeiros', team: 'Equipe', users: 'Usuários', roles: 'Cargos e permissões',
   settings: 'Configurações globais', appearance: 'Aparência global', audit: 'Auditoria', profile: 'Meu perfil',
-  documents: 'Documentos', attachments: 'Anexos', notifications: 'Notificações', calendar: 'Agenda',
+  documents: 'Documentos', attachments: 'Anexos', notifications: 'Notificações', calendar: 'Agenda', badges: 'Emblemas e gamificação',
 }
 
 const actionLabels: Record<string, string> = {
@@ -171,6 +172,12 @@ export function RoleManagementWorkspace({ initialView = 'roles' }: { initialView
       return groups
     }, {})
   }, [permissions, search])
+
+  const permissionsByGroup = useMemo(() => permissions.reduce<Record<string, Permission[]>>((groups, permission) => {
+    const group = moduleGroups[permission.module_name] ?? 'Outros'
+    groups[group] = [...(groups[group] ?? []), permission]
+    return groups
+  }, {}), [permissions])
 
   function selectRole(id: string) {
     setSelectedRole(id)
@@ -464,7 +471,7 @@ export function RoleManagementWorkspace({ initialView = 'roles' }: { initialView
             <div><dt className="text-xs text-slate-500">Status</dt><dd className="mt-1 text-slate-200">{memberDetails.status}</dd></div>
             <div><dt className="text-xs text-slate-500">Criado em</dt><dd className="mt-1 text-slate-200">{new Date(memberDetails.created_at).toLocaleDateString('pt-BR')}</dd></div>
           </dl>
-          {expandedMember === memberDetails.id && <div className="mt-6 border-t border-white/[0.06] pt-4"><p className="text-xs font-semibold text-slate-300">Exceções individuais</p><p className="mt-1 text-[11px] text-slate-500">Herdar remove a exceção e mantém a permissão do cargo.</p><div className="mt-3 max-h-64 space-y-2 overflow-y-auto">{permissions.map((permission) => { const key = `${permission.module_name}:${permission.action_name}`; const override = permissionOverrides[memberDetails.id]?.find((item) => item.module_name === permission.module_name && item.action_name === permission.action_name); return <label key={permission.id} className="flex items-center justify-between gap-3 rounded-lg border border-white/[0.06] px-3 py-2 text-xs text-slate-300"><span>{moduleLabels[permission.module_name] ?? permission.module_name} · {actionLabels[permission.action_name] ?? permission.action_name}</span><select value={override?.effect ?? 'inherit'} onChange={(event) => void updateMemberOverride(memberDetails.id, permission.module_name, permission.action_name, event.target.value as Override['effect'])} className="rounded border border-white/[0.08] bg-[#0d1118] px-2 py-1.5 text-[11px] text-slate-200"><option value="inherit">Herdar</option><option value="allow">Permitir</option><option value="deny">Negar</option></select></label> })}</div></div>}
+          {expandedMember === memberDetails.id && <div className="mt-6 border-t border-white/[0.06] pt-4"><p className="text-xs font-semibold text-slate-300">Exceções individuais</p><p className="mt-1 text-[11px] text-slate-500">Herdar remove a exceção e mantém a permissão do cargo.</p><div className="mt-3 max-h-80 space-y-2 overflow-y-auto">{Object.entries(permissionsByGroup).map(([group, groupPermissions]) => { const byModule = Object.entries(groupPermissions.reduce<Record<string, Permission[]>>((modules, permission) => { modules[permission.module_name] = [...(modules[permission.module_name] ?? []), permission]; return modules }, {})); return <details key={group} open className="rounded-lg border border-white/[0.06] bg-white/[0.015]"><summary className="cursor-pointer px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-blue-300">{group}</summary><div className="space-y-2 px-2 pb-2">{byModule.map(([module, modulePermissions]) => <details key={module} open className="rounded-md border border-white/[0.05]"><summary className="cursor-pointer px-3 py-2 text-xs font-medium text-slate-300">{moduleLabels[module] ?? module}</summary><div className="space-y-1 px-2 pb-2">{modulePermissions.map((permission) => { const override = permissionOverrides[memberDetails.id]?.find((item) => item.module_name === permission.module_name && item.action_name === permission.action_name); return <label key={permission.id} className="flex items-center justify-between gap-3 rounded-lg border border-white/[0.06] px-3 py-2 text-xs text-slate-300"><span>{actionLabels[permission.action_name] ?? permission.action_name}</span><select value={override?.effect ?? 'inherit'} onChange={(event) => void updateMemberOverride(memberDetails.id, permission.module_name, permission.action_name, event.target.value as Override['effect'])} className="rounded border border-white/[0.08] bg-[#0d1118] px-2 py-1.5 text-[11px] text-slate-200"><option value="inherit">Herdar</option><option value="allow">Permitir</option><option value="deny">Negar</option></select></label> })}</div></details>)}</div></details> })}</div></div>}
           <div className="mt-6 flex justify-end gap-2"><button type="button" onClick={() => setMemberDetails(null)} className="rounded-lg px-3 py-2 text-xs text-slate-300">Fechar</button><button type="button" disabled={memberDetails.user_id === currentUserId} onClick={() => { setEditingMember(memberDetails); setMemberDetails(null) }} className="inline-flex items-center gap-1.5 rounded-lg bg-blue-500 px-3 py-2 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40"><Pencil className="size-3.5" />Editar</button></div>
         </section>
       </div>}
