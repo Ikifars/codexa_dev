@@ -139,7 +139,7 @@ function DashboardContent({ initialSection = 'Dashboard', page, permissions, pro
   const pathname = usePathname()
   const [collapsed, setCollapsed] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
-  const [openNavGroup, setOpenNavGroup] = useState('Workspace')
+  const [openNavGroups, setOpenNavGroups] = useState<Set<string>>(() => new Set(['Workspace']))
   const [activeSection, setActiveSection] = useState(initialSection)
   const [searchOpen, setSearchOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
@@ -321,8 +321,8 @@ function DashboardContent({ initialSection = 'Dashboard', page, permissions, pro
             if (!visibleItems.length) return null
             return (
             <div key={group.label} role="group" aria-label={group.label}>
-              {!collapsed ? <button type="button" onClick={() => setOpenNavGroup((current) => current === group.label ? '' : group.label)} className="mb-1 flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500 hover:bg-white/[0.04] hover:text-slate-300"><span>{group.label}</span><ChevronDown className={`size-3 transition-transform ${openNavGroup === group.label ? 'rotate-180' : ''}`} /></button> : null}
-              {(collapsed || openNavGroup === group.label) && <div className="flex flex-col gap-0.5">
+              {!collapsed ? <button type="button" onClick={() => setOpenNavGroups((current) => { const next = new Set(current); if (next.has(group.label)) next.delete(group.label); else next.add(group.label); return next })} className="mb-1 flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500 hover:bg-white/[0.04] hover:text-slate-300"><span>{group.label}</span><ChevronDown className={`size-3 transition-transform ${openNavGroups.has(group.label) ? 'rotate-180' : ''}`} /></button> : null}
+              {(collapsed || openNavGroups.has(group.label)) && <div className="flex flex-col gap-0.5">
                 {visibleItems.map((item) => {
                   const icon = item.icon
                   const isActive = activeSection === item.label
