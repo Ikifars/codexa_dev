@@ -23,6 +23,7 @@ export const workspaceAccess: Record<string, string[]> = {
   'papeis-e-permissoes': ['roles:manage_roles'],
   documentos: ['documents:view'],
   emblemas: ['badges:manage'],
+  'configuracao-xp': ['badges:manage'],
   'meu-perfil': ['profile:view'],
   'meu-historico': ['projects:view'],
   configuracoes: ['settings:view'],
