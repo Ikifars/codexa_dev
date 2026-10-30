@@ -19,7 +19,7 @@ import { createClient } from '@/lib/supabase/client'
 import { hasWorkspaceAccess } from '@/lib/workspace-access'
 import { applyWorkspaceTheme, getWorkspaceThemePreference } from '@/lib/workspace-theme'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faChartLine, faUserPlus, faUsers, faAddressBook, faFileSignature, faFileContract, faDiagramProject, faListCheck, faCodePullRequest, faHeadset, faServer, faPuzzlePiece, faLayerGroup, faKey, faArrowTrendUp, faArrowTrendDown, faChartPie, faUserShield, faUserGear, faShieldHalved, faClockRotateLeft, faUserCircle, faPalette, faGear, faMedal, faTrophy } from '@fortawesome/free-solid-svg-icons'
+import { faChartLine, faUserPlus, faUsers, faAddressBook, faFileSignature, faFileContract, faDiagramProject, faListCheck, faCodePullRequest, faHeadset, faServer, faPuzzlePiece, faLayerGroup, faKey, faArrowTrendUp, faArrowTrendDown, faChartPie, faUserShield, faUserGear, faShieldHalved, faClockRotateLeft, faUserCircle, faPalette, faGear, faMedal, faTrophy, faFolderOpen } from '@fortawesome/free-solid-svg-icons'
 import {
   Activity,
   Bell,
@@ -52,7 +52,7 @@ import {
 } from 'lucide-react'
 
 const navigationGroups = [
-  { label: 'Workspace', items: [{ label: 'Dashboard', icon: faChartLine }] },
+  { label: 'Workspace', items: [{ label: 'Dashboard', icon: faChartLine }, { label: 'Documentos', icon: faFolderOpen }] },
   { label: 'Relacionamento', items: [
     { label: 'Leads', icon: faUserPlus },
     { label: 'Clientes', icon: faUsers },
@@ -98,7 +98,7 @@ const navigationGroups = [
 ]
 
 const sectionSlugs: Record<string, string> = {
-  Dashboard: 'dashboard', Leads: 'leads', Clientes: 'clientes', Contatos: 'contatos', Propostas: 'propostas', Contratos: 'contratos',
+  Dashboard: 'dashboard', Documentos: 'documentos', Leads: 'leads', Clientes: 'clientes', Contatos: 'contatos', Propostas: 'propostas', Contratos: 'contratos',
   Projetos: 'projetos', Tarefas: 'tarefas', 'Solicitações de alteração': 'solicitacoes', Suporte: 'suporte', 'Sistemas dos clientes': 'sistemas',
   Módulos: 'modulos', Planos: 'planos', Licenças: 'licencas', 'Contas a receber': 'contas-a-receber', 'Contas a pagar': 'contas-a-pagar',
   'Fluxo de caixa': 'fluxo-de-caixa', Transações: 'transacoes', 'Categorias financeiras': 'categorias-financeiras', Relatórios: 'relatorios', Equipe: 'equipe',
@@ -137,6 +137,7 @@ function DashboardContent({ initialSection = 'Dashboard', page, permissions, pro
   const pathname = usePathname()
   const [collapsed, setCollapsed] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
+  const [openNavGroup, setOpenNavGroup] = useState('Workspace')
   const [activeSection, setActiveSection] = useState(initialSection)
   const [searchOpen, setSearchOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
@@ -318,14 +319,14 @@ function DashboardContent({ initialSection = 'Dashboard', page, permissions, pro
             if (!visibleItems.length) return null
             return (
             <div key={group.label} role="group" aria-label={group.label}>
-              {!collapsed && <p className="mb-1.5 px-3 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">{group.label}</p>}
-              <div className="flex flex-col gap-0.5">
+              {!collapsed ? <button type="button" onClick={() => setOpenNavGroup((current) => current === group.label ? '' : group.label)} className="mb-1 flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500 hover:bg-white/[0.04] hover:text-slate-300"><span>{group.label}</span><ChevronDown className={`size-3 transition-transform ${openNavGroup === group.label ? 'rotate-180' : ''}`} /></button> : null}
+              {(collapsed || openNavGroup === group.label) && <div className="flex flex-col gap-0.5">
                 {visibleItems.map((item) => {
                   const icon = item.icon
                   const isActive = activeSection === item.label
                   return <button key={item.label} onClick={() => openSection(item.label)} className={`group relative flex min-h-10 items-center gap-3 rounded-lg border-l-2 px-3 py-2 text-left text-[13px] transition-colors ${isActive ? 'border-blue-400 bg-blue-400/10 font-medium text-blue-200' : 'border-transparent text-slate-400 hover:bg-white/[0.04] hover:text-slate-100'} ${collapsed ? 'justify-center px-0' : ''}`} title={collapsed ? item.label : undefined} aria-current={isActive ? 'page' : undefined}><FontAwesomeIcon icon={icon} className={`size-3.5 shrink-0 ${isActive ? 'text-blue-300' : 'text-slate-500 group-hover:text-slate-300'}`} />{!collapsed && <span className="truncate">{item.label}</span>}</button>
                 })}
-              </div>
+              </div>}
             </div>
           )})}
         </nav>

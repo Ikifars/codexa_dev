@@ -28,7 +28,7 @@ export function AuthScreen({ onAuthenticated }: { onAuthenticated: () => void })
     setMessage('')
     const supabase = createClient()
     if (recoveryMode) {
-      const redirectTo = `${window.location.origin}/auth/callback?next=/workspace`
+      const redirectTo = `${window.location.origin}/auth/callback?next=/reset-password`
       const { error } = await supabase.auth.resetPasswordForEmail(email.trim().toLowerCase(), { redirectTo })
       if (error) setMessage('Não foi possível enviar o link de recuperação. Confira o e-mail informado.')
       else { setRecoverySent(true); setMessage('Enviamos um link de recuperação para seu e-mail.') }
