@@ -29,6 +29,10 @@ function rolesForSector(sector: string) {
   return []
 }
 
+async function awardXp(actionKey: string, entityType: string, entityId: string) {
+  await fetch('/api/workspace/xp/award', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ actionKey, entityType, entityId }) })
+}
+
 function toLocalDateTime(value: string | null) {
   if (!value) return ''
   const date = new Date(value)
@@ -207,6 +211,8 @@ export function OperationsWorkspace({ initialModule = 'projects', permissions }:
     const { error: updateError } = await createClient().from(table).update(payload).eq('id', record.id)
     if (updateError) setError(`Não foi possível salvar as alterações: ${updateError.message}`)
     else {
+      if (isSupportTicket && isResolved && !wasResolved) await awardXp('resolve_support_ticket', 'support_ticket', record.id)
+      if (!isSupportTicket && String(data.status).toLowerCase().includes('aprov')) await awardXp('approve_change_request', 'change_request', record.id)
       setRecord(null)
       setEditingRecord(false)
       await loadData()

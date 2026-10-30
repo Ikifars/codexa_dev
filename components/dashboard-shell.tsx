@@ -15,11 +15,12 @@ import { ActivityHistoryWorkspace } from '@/components/activity-history-workspac
 import { AccountWorkspace } from '@/components/account-workspace'
 import { GamifiedProfileWorkspace } from '@/components/gamified-profile-workspace'
 import { AuthScreen } from '@/components/auth-screen'
+import { XpSettingsWorkspace } from '@/components/xp-settings-workspace'
 import { createClient } from '@/lib/supabase/client'
 import { hasWorkspaceAccess } from '@/lib/workspace-access'
 import { applyWorkspaceTheme, getWorkspaceThemePreference } from '@/lib/workspace-theme'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faChartLine, faUserPlus, faUsers, faAddressBook, faFileSignature, faFileContract, faDiagramProject, faListCheck, faCodePullRequest, faHeadset, faServer, faPuzzlePiece, faLayerGroup, faKey, faArrowTrendUp, faArrowTrendDown, faChartPie, faUserShield, faUserGear, faShieldHalved, faClockRotateLeft, faUserCircle, faPalette, faGear, faMedal, faTrophy } from '@fortawesome/free-solid-svg-icons'
+import { faChartLine, faUserPlus, faUsers, faAddressBook, faFileSignature, faFileContract, faDiagramProject, faListCheck, faCodePullRequest, faHeadset, faServer, faPuzzlePiece, faLayerGroup, faKey, faArrowTrendUp, faArrowTrendDown, faChartPie, faUserShield, faUserGear, faShieldHalved, faClockRotateLeft, faUserCircle, faPalette, faGear, faMedal, faTrophy, faFolderOpen, faSliders } from '@fortawesome/free-solid-svg-icons'
 import {
   Activity,
   Bell,
@@ -52,7 +53,7 @@ import {
 } from 'lucide-react'
 
 const navigationGroups = [
-  { label: 'Workspace', items: [{ label: 'Dashboard', icon: faChartLine }] },
+  { label: 'Workspace', items: [{ label: 'Dashboard', icon: faChartLine }, { label: 'Documentos', icon: faFolderOpen }] },
   { label: 'Relacionamento', items: [
     { label: 'Leads', icon: faUserPlus },
     { label: 'Clientes', icon: faUsers },
@@ -87,6 +88,7 @@ const navigationGroups = [
     { label: 'Usuários', icon: faUserGear },
     { label: 'Papéis e permissões', icon: faUserShield },
     { label: 'Emblemas', icon: faMedal },
+  { label: 'Configuração de XP', icon: faSliders }, 
     { label: 'Auditoria', icon: faClockRotateLeft }
   ] },
   { label: 'Conta', items: [
@@ -98,11 +100,11 @@ const navigationGroups = [
 ]
 
 const sectionSlugs: Record<string, string> = {
-  Dashboard: 'dashboard', Leads: 'leads', Clientes: 'clientes', Contatos: 'contatos', Propostas: 'propostas', Contratos: 'contratos',
+  Dashboard: 'dashboard', Documentos: 'documentos', Leads: 'leads', Clientes: 'clientes', Contatos: 'contatos', Propostas: 'propostas', Contratos: 'contratos',
   Projetos: 'projetos', Tarefas: 'tarefas', 'Solicitações de alteração': 'solicitacoes', Suporte: 'suporte', 'Sistemas dos clientes': 'sistemas',
   Módulos: 'modulos', Planos: 'planos', Licenças: 'licencas', 'Contas a receber': 'contas-a-receber', 'Contas a pagar': 'contas-a-pagar',
   'Fluxo de caixa': 'fluxo-de-caixa', Transações: 'transacoes', 'Categorias financeiras': 'categorias-financeiras', Relatórios: 'relatorios', Equipe: 'equipe',
-  Usuários: 'usuarios', 'Papéis e permissões': 'papeis-e-permissoes', Emblemas: 'emblemas', 'Meu perfil': 'meu-perfil', 'Meu histórico': 'meu-historico', Configurações: 'configuracoes', Aparência: 'aparencia', Auditoria: 'auditoria',
+  Usuários: 'usuarios', 'Papéis e permissões': 'papeis-e-permissoes', Emblemas: 'emblemas', 'Configuração de XP': 'configuracao-xp', 'Meu perfil': 'meu-perfil', 'Meu histórico': 'meu-historico', Configurações: 'configuracoes', Aparência: 'aparencia', Auditoria: 'auditoria',
 }
 
 const metrics = [
@@ -137,6 +139,7 @@ function DashboardContent({ initialSection = 'Dashboard', page, permissions, pro
   const pathname = usePathname()
   const [collapsed, setCollapsed] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
+  const [openNavGroups, setOpenNavGroups] = useState<Set<string>>(() => new Set(['Workspace']))
   const [activeSection, setActiveSection] = useState(initialSection)
   const [searchOpen, setSearchOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
@@ -318,14 +321,14 @@ function DashboardContent({ initialSection = 'Dashboard', page, permissions, pro
             if (!visibleItems.length) return null
             return (
             <div key={group.label} role="group" aria-label={group.label}>
-              {!collapsed && <p className="mb-1.5 px-3 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">{group.label}</p>}
-              <div className="flex flex-col gap-0.5">
+              {!collapsed ? <button type="button" onClick={() => setOpenNavGroups((current) => { const next = new Set(current); if (next.has(group.label)) next.delete(group.label); else next.add(group.label); return next })} className="mb-1 flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500 hover:bg-white/[0.04] hover:text-slate-300"><span>{group.label}</span><ChevronDown className={`size-3 transition-transform ${openNavGroups.has(group.label) ? 'rotate-180' : ''}`} /></button> : null}
+              {(collapsed || openNavGroups.has(group.label)) && <div className="flex flex-col gap-0.5">
                 {visibleItems.map((item) => {
                   const icon = item.icon
                   const isActive = activeSection === item.label
                   return <button key={item.label} onClick={() => openSection(item.label)} className={`group relative flex min-h-10 items-center gap-3 rounded-lg border-l-2 px-3 py-2 text-left text-[13px] transition-colors ${isActive ? 'border-blue-400 bg-blue-400/10 font-medium text-blue-200' : 'border-transparent text-slate-400 hover:bg-white/[0.04] hover:text-slate-100'} ${collapsed ? 'justify-center px-0' : ''}`} title={collapsed ? item.label : undefined} aria-current={isActive ? 'page' : undefined}><FontAwesomeIcon icon={icon} className={`size-3.5 shrink-0 ${isActive ? 'text-blue-300' : 'text-slate-500 group-hover:text-slate-300'}`} />{!collapsed && <span className="truncate">{item.label}</span>}</button>
                 })}
-              </div>
+              </div>}
             </div>
           )})}
         </nav>
@@ -386,11 +389,12 @@ function DashboardContent({ initialSection = 'Dashboard', page, permissions, pro
           {['Contas a receber', 'Contas a pagar', 'Fluxo de caixa', 'Transações', 'Categorias financeiras'].includes(activeSection) && <div id="finance-workspace" className="scroll-mt-24"><FinanceWorkspace initialTab={activeSection === 'Contas a receber' ? 'receivable' : activeSection === 'Contas a pagar' ? 'payable' : 'overview'} permissions={permissions} /></div>}
           {activeSection === 'Relatórios' && <div id="reports-workspace" className="scroll-mt-24"><ReportsWorkspace permissions={permissions} /></div>}
           {['Equipe', 'Configurações'].includes(activeSection) && <div id="admin-workspace" className="scroll-mt-24"><AdminWorkspace section={activeSection} permissions={permissions} /></div>}
-          {activeSection === 'Auditoria' && <ActivityHistoryWorkspace permissions={permissions} mode="audit" />}
+          {activeSection === 'Configuração de XP' && <XpSettingsWorkspace />}
+  {activeSection === 'Auditoria' && <ActivityHistoryWorkspace permissions={permissions} mode="audit" />}
           {activeSection === 'Meu histórico' && <ActivityHistoryWorkspace permissions={permissions} mode="personal" />}
           {activeSection === 'Meu perfil' && <GamifiedProfileWorkspace initialName={profileName} />}
   {activeSection === 'Aparência' && <AccountWorkspace section={activeSection} initialName={profileName} />}
-          {!['Dashboard', 'Leads', 'Mensagens', 'Clientes', 'Propostas', 'Contratos', 'Projetos', 'Solicitações de alteração', 'Suporte', 'Sistemas', 'Módulos', 'Planos', 'Licenças', 'Financeiro', 'Equipe', 'Relatórios', 'Configurações', 'Auditoria', 'Meu histórico', 'Emblemas'].includes(activeSection) && <section className="rounded-xl border border-white/[0.07] bg-[#11161e] p-8"><p className="text-xs font-medium uppercase tracking-[0.16em] text-blue-400">Módulo</p><h1 className="mt-2 text-2xl font-semibold text-white">{activeSection}</h1><p className="mt-2 text-sm text-slate-500">Esta página está preparada para receber os registros deste módulo.</p></section>}
+          {!['Dashboard', 'Leads', 'Mensagens', 'Clientes', 'Propostas', 'Contratos', 'Projetos', 'Solicitações de alteração', 'Suporte', 'Sistemas', 'Módulos', 'Planos', 'Licenças', 'Financeiro', 'Equipe', 'Relatórios', 'Configurações', 'Auditoria', 'Meu histórico', 'Emblemas', 'Configuração de XP'].includes(activeSection) && <section className="rounded-xl border border-white/[0.07] bg-[#11161e] p-8"><p className="text-xs font-medium uppercase tracking-[0.16em] text-blue-400">Módulo</p><h1 className="mt-2 text-2xl font-semibold text-white">{activeSection}</h1><p className="mt-2 text-sm text-slate-500">Esta página está preparada para receber os registros deste módulo.</p></section>}
           </>}
           <div className="mt-7 flex items-center gap-2 text-[11px] text-slate-600"><div className="size-1.5 rounded-full bg-amber-400" />Supabase conectado · CRM pronto para seus primeiros registros.</div>
         </main>
