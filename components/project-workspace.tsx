@@ -244,7 +244,10 @@ export function ProjectWorkspace({ projectId, permissions }: { projectId: string
       setTasks(previousTasks)
       setError(updateError.message)
     } else {
-      if (isComplete(status) && !isComplete(task.status)) void fetch('/api/workspace/xp/award', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ actionKey: 'complete_task', entityType: 'task', entityId: task.id }) })
+      if (isComplete(status) && !isComplete(task.status)) {
+        const onTime = task.due_date && new Date(`${task.due_date}T23:59:59`) >= new Date()
+        void fetch('/api/workspace/xp/award', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ actionKey: onTime ? 'complete_task_on_time' : 'complete_task', entityType: 'task', entityId: task.id }) })
+      }
       setNotice(`Tarefa movida para ${status}.`)
       void loadData()
     }
@@ -274,6 +277,7 @@ export function ProjectWorkspace({ projectId, permissions }: { projectId: string
       return
     }
     setTaskModal({ open: false, task: null, status: 'Backlog' })
+    void fetch('/api/workspace/xp/award', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ actionKey: 'create_task', entityType: 'task', entityId: id }) })
     setNotice('Tarefa criada.')
     await loadData()
   }
@@ -299,7 +303,10 @@ export function ProjectWorkspace({ projectId, permissions }: { projectId: string
       return
     }
     setTaskModal({ open: false, task: null, status: 'Backlog' })
-    if (isComplete(String(data.get('status') ?? task.status)) && !isComplete(task.status)) void fetch('/api/workspace/xp/award', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ actionKey: 'complete_task', entityType: 'task', entityId: task.id }) })
+    if (isComplete(String(data.get('status') ?? task.status)) && !isComplete(task.status)) {
+      const onTime = task.due_date && new Date(`${task.due_date}T23:59:59`) >= new Date()
+      void fetch('/api/workspace/xp/award', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ actionKey: onTime ? 'complete_task_on_time' : 'complete_task', entityType: 'task', entityId: task.id }) })
+    }
     setNotice('Tarefa atualizada.')
     await loadData()
   }
