@@ -13,14 +13,28 @@ export async function GET() {
     const actor = await getWorkspaceActor()
     const { data: authUser, error } = await actor.supabase.auth.admin.getUserById(actor.actorId)
     if (error || !authUser.user) throw new AdminApiError('Não foi possível carregar seu perfil.', 503)
-    const { data: member } = await actor.supabase.from('team_members').select('full_name, email, role_name, xp, level').eq('id', actor.memberId).maybeSingle()
+    const [{ data: member }, { data: levels }] = await Promise.all([
+      actor.supabase.from('team_members').select('full_name, email, role_name, xp, level').eq('id', actor.memberId).maybeSingle(),
+      actor.supabase.from('gamification_levels').select('level,name,min_xp').eq('is_active', true).order('min_xp'),
+    ])
     const { data: badges } = await actor.supabase.from('profile_badges').select('id, name, description, color, image_path, granted_at, expires_at, is_temporary').eq('member_id', actor.memberId).order('granted_at', { ascending: false })
     const metadata = authUser.user.user_metadata ?? {}
     const badgePaths = [...new Set((badges ?? []).map((badge) => badge.image_path).filter(Boolean))] as string[]
     const signed = badgePaths.length ? await actor.supabase.storage.from('private-documents').createSignedUrls(badgePaths, 3600) : { data: [] }
     const badgeUrls = new Map((signed.data ?? []).map((item) => [item.path, item.signedUrl]))
     const badgesWithImages = (badges ?? []).map((badge) => ({ ...badge, image_url: badge.image_path ? badgeUrls.get(badge.image_path) ?? null : null }))
-    return NextResponse.json({ fullName: member?.full_name ?? metadata.full_name ?? '', nickname: metadata.nickname ?? '', avatarUrl: metadata.avatar_url ?? '', email: authUser.user.email ?? member?.email ?? '', role: member?.role_name ?? 'Membro', points: Number(member?.xp ?? metadata.profile_points ?? 0), level: Number(member?.level ?? metadata.profile_level ?? 1), badges: badgesWithImages })
+    const points = Number(member?.xp ?? metadata.profile_points ?? 0)
+    const configuredLevels = levels ?? []
+    const orderedLevels = configuredLevels.filter((item) => item.min_xp <= points)
+    const configuredCurrent = orderedLevels.at(-1)
+    const configuredNext = configuredLevels.find((item) => item.min_xp > points)
+    const step = Math.max(100, (configuredLevels.at(-1)?.min_xp ?? 100) - (configuredLevels.at(-2)?.min_xp ?? 0))
+    const baseLevel = Number(configuredCurrent?.level ?? member?.level ?? 1)
+    const dynamicLevel = configuredCurrent && points > configuredCurrent.min_xp ? baseLevel + Math.floor((points - configuredCurrent.min_xp) / step) : baseLevel
+    const dynamicCurrentXp = configuredCurrent ? configuredCurrent.min_xp + Math.max(0, dynamicLevel - configuredCurrent.level) * step : 0
+    const dynamicNextXp = configuredNext?.min_xp ?? dynamicCurrentXp + step
+    const hasNextMilestone = Boolean(configuredNext)
+    return NextResponse.json({ fullName: member?.full_name ?? metadata.full_name ?? '', nickname: metadata.nickname ?? '', avatarUrl: metadata.avatar_url ?? '', email: authUser.user.email ?? member?.email ?? '', role: member?.role_name ?? 'Membro', points, level: dynamicLevel, levelName: configuredCurrent?.name ?? 'Iniciante', hasNextMilestone, currentLevelXp: dynamicCurrentXp, nextLevelXp: dynamicNextXp, badges: badgesWithImages })
   } catch (error) { return fail(error) }
 }
 
