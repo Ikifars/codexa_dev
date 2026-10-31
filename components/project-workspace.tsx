@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { EntityAttachments } from '@/components/entity-attachments'
 import { TaskSharing } from '@/components/task-sharing'
+import { ProjectMembersPanel } from '@/components/project-members-panel'
 import { ArrowLeft, BriefcaseBusiness, CalendarDays, CheckCircle2, CircleAlert, ClipboardList, Clock3, FileText, Flag, FolderKanban, GripVertical, Loader2, MessageSquare, MoreHorizontal, Paperclip, Plus, Search, Save, Send, Trash2, Users, X } from 'lucide-react'
 
 type Project = {
@@ -494,8 +495,9 @@ export function ProjectWorkspace({ projectId, permissions }: { projectId: string
         </div>
       </div>
 
-      {tab === 'overview' && <div className="space-y-5">
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+{tab === 'overview' && <div className="space-y-5">
+  <ProjectMembersPanel projectId={project.id} permissions={permissions} />
+  <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
           {[
             ['Total de tarefas', String(validTasks.length), ClipboardList],
             ['Concluídas', String(completedTasks), CheckCircle2],
