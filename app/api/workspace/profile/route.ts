@@ -34,7 +34,7 @@ export async function GET() {
     const dynamicCurrentXp = configuredCurrent ? configuredCurrent.min_xp + Math.max(0, dynamicLevel - configuredCurrent.level) * step : 0
     const dynamicNextXp = configuredNext?.min_xp ?? dynamicCurrentXp + step
     const hasNextMilestone = Boolean(configuredNext)
-    return NextResponse.json({ fullName: member?.full_name ?? metadata.full_name ?? '', nickname: metadata.nickname ?? '', avatarUrl: metadata.avatar_url ?? '', email: authUser.user.email ?? member?.email ?? '', role: member?.role_name ?? 'Membro', points, level: dynamicLevel, levelName: configuredCurrent?.level === dynamicLevel ? configuredCurrent.name : `Nível ${dynamicLevel}`, hasNextMilestone, currentLevelXp: dynamicCurrentXp, nextLevelXp: dynamicNextXp, badges: badgesWithImages })
+    return NextResponse.json({ fullName: member?.full_name ?? metadata.full_name ?? '', nickname: metadata.nickname ?? '', avatarUrl: metadata.avatar_url ?? '', email: authUser.user.email ?? member?.email ?? '', role: member?.role_name ?? 'Membro', points, level: dynamicLevel, levelName: configuredCurrent?.name ?? 'Iniciante', hasNextMilestone, currentLevelXp: dynamicCurrentXp, nextLevelXp: dynamicNextXp, badges: badgesWithImages })
   } catch (error) { return fail(error) }
 }
 
