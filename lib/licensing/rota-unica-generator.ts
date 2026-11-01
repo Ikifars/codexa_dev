@@ -178,6 +178,29 @@ export function generateClientGuard() {
   return `import type { ReactNode } from 'react'\nexport function CodexaModuleGuard({ allowed, children, name }: { allowed: boolean; children: ReactNode; name: string }) {\n  if (allowed) return <>{children}</>\n  return <section className="rounded-xl border border-amber-300/20 bg-amber-300/5 p-5"><h2>Módulo não disponível</h2><p>O módulo {name} não está liberado para esta licença.</p></section>\n}\n`
 }
 
+export function generateVisualClientScript() {
+  return `(() => {
+  'use strict'
+  const script = document.currentScript
+  if (!script) return
+  const source = new URL(script.src, window.location.href)
+  const token = source.searchParams.get('token')
+  if (!token) return
+  const apiUrl = source.searchParams.get('api') || source.origin + '/api/licenses/validate'
+  let lastState = ''; let validating = false
+  const showSuspended = () => { if (document.getElementById('codexa-license-suspended')) return; const overlay = document.createElement('div'); overlay.id = 'codexa-license-suspended'; overlay.setAttribute('role', 'alertdialog'); overlay.setAttribute('aria-modal', 'true'); overlay.style.cssText = 'position:fixed;inset:0;z-index:2147483647;display:grid;place-items:center;padding:24px;background:rgba(8,12,20,.96);color:#fff;font:16px/1.5 system-ui,sans-serif;text-align:center'; overlay.innerHTML = '<div><strong style="display:block;font-size:24px;margin-bottom:12px">Sistema suspenso</strong><span>Este sistema está temporariamente suspenso. Entre em contato com o suporte.</span></div>'; document.body.appendChild(overlay) }
+  const applyModules = (modules) => { const byCode = new Map(modules.map((module) => [module.code, module])); document.querySelectorAll('[data-lic-module],[data-license-module]').forEach((element) => { const code = element.getAttribute('data-lic-module') || element.getAttribute('data-license-module'); const module = byCode.get(code); if (module && !module.licensed) element.remove() }); document.querySelectorAll('[data-lic-action],[data-license-action]').forEach((element) => { const code = element.getAttribute('data-lic-action') || element.getAttribute('data-license-action'); const module = byCode.get(code); if (module && !module.licensed) { element.setAttribute('aria-disabled', 'true'); element.setAttribute('title', 'Este recurso não está disponível na sua licença.'); element.addEventListener('click', (event) => event.preventDefault(), { capture: true, once: true }) } }) }
+  async function validate() { if (validating) return; validating = true; try { const response = await fetch(apiUrl, { method: 'POST', headers: { Authorization: 'Bearer ' + token, Accept: 'application/json' }, cache: 'no-store', credentials: 'omit' }); const result = await response.json(); const state = JSON.stringify(result); if (state === lastState) return; lastState = state; if (!result.valid || response.status === 401) showSuspended(); else if (Array.isArray(result.modules)) applyModules(result.modules) } catch {} finally { validating = false } }
+  const start = () => { void validate(); const observer = new MutationObserver(() => { if (lastState) { try { applyModules(JSON.parse(lastState).modules || []) } catch {} } }); observer.observe(document.documentElement, { childList: true, subtree: true }); window.setInterval(() => void validate(), 30000) }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start, { once: true }); else start()
+})()
+`
+}
+
+export function generateVisualScriptSnippet() {
+  return `<script src="https://SEU-DOMINIO-CODEXA/api/client-script.js?token=SUA_CHAVE_DE_LICENCA&api=https%3A%2F%2FSEU-DOMINIO-CODEXA%2Fapi%2Flicenses%2Fvalidate" defer></script>`
+}
+
 export function generateServerLicenseHelper(apiUrl: string) {
   return `export type CodexaModule = { code: string; name: string; contracted: boolean; enabled: boolean; available: boolean; licensed: boolean }\nexport type CodexaDecision = { valid: boolean; reason: string | null; expiresAt: string | null; modules: CodexaModule[] }\nconst empty = (reason: string): CodexaDecision => ({ valid: false, reason, expiresAt: null, modules: [] })\nexport async function getCodexaDecision(): Promise<CodexaDecision> {\n  const key = process.env.CODEXA_LICENSE_KEY\n  if (!key) return empty('CODEXA_LICENSE_KEY não configurada.')\n  try {\n    const response = await fetch(process.env.CODEXA_LICENSE_API_URL ?? ${JSON.stringify(apiUrl)}, { method: 'POST', headers: { Authorization: 'Bearer ' + key, Accept: 'application/json' }, cache: 'no-store' })\n    if (!response.ok) return empty('Serviço de licenciamento indisponível.')\n    const result = await response.json() as Partial<CodexaDecision>\n    if (result.valid !== true || !Array.isArray(result.modules)) return empty('Resposta de licenciamento inválida.')\n    return { valid: true, reason: result.reason ?? null, expiresAt: result.expiresAt ?? null, modules: result.modules }\n  } catch { return empty('Não foi possível consultar o serviço de licenciamento.') }\n}\nexport async function requireLicensedModule(code: string) { const decision = await getCodexaDecision(); const module = decision.modules.find((item) => item.code === code); if (!decision.valid || !module?.available || !module.licensed) throw new Error('Módulo não licenciado.'); return decision }\n`
 }
