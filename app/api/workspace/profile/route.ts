@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { AdminApiError } from '@/lib/supabase/server-client'
 import { getWorkspaceActor } from '@/lib/supabase/workspace-auth'
+import { computeLevelState } from '@/lib/gamification'
 
 function fail(error: unknown) {
   if (error instanceof AdminApiError) return NextResponse.json({ error: error.message }, { status: error.status })
@@ -24,17 +25,23 @@ export async function GET() {
     const badgeUrls = new Map((signed.data ?? []).map((item) => [item.path, item.signedUrl]))
     const badgesWithImages = (badges ?? []).map((badge) => ({ ...badge, image_url: badge.image_path ? badgeUrls.get(badge.image_path) ?? null : null }))
     const points = Number(member?.xp ?? metadata.profile_points ?? 0)
-    const configuredLevels = levels ?? []
-    const orderedLevels = configuredLevels.filter((item) => item.min_xp <= points)
-    const configuredCurrent = orderedLevels.at(-1)
-    const configuredNext = configuredLevels.find((item) => item.min_xp > points)
-    const step = Math.max(100, (configuredLevels.at(-1)?.min_xp ?? 100) - (configuredLevels.at(-2)?.min_xp ?? 0))
-    const baseLevel = Number(configuredCurrent?.level ?? member?.level ?? 1)
-    const dynamicLevel = configuredCurrent && points > configuredCurrent.min_xp ? baseLevel + Math.floor((points - configuredCurrent.min_xp) / step) : baseLevel
-    const dynamicCurrentXp = configuredCurrent ? configuredCurrent.min_xp + Math.max(0, dynamicLevel - configuredCurrent.level) * step : 0
-    const dynamicNextXp = configuredNext?.min_xp ?? dynamicCurrentXp + step
-    const hasNextMilestone = Boolean(configuredNext)
-    return NextResponse.json({ fullName: member?.full_name ?? metadata.full_name ?? '', nickname: metadata.nickname ?? '', avatarUrl: metadata.avatar_url ?? '', email: authUser.user.email ?? member?.email ?? '', role: member?.role_name ?? 'Membro', points, level: dynamicLevel, levelName: configuredCurrent?.name ?? 'Iniciante', hasNextMilestone, currentLevelXp: dynamicCurrentXp, nextLevelXp: dynamicNextXp, badges: badgesWithImages })
+    const configuredLevels = (levels ?? []).filter((item) => (item as { is_active?: boolean | null }).is_active !== false)
+    const levelState = computeLevelState(points, configuredLevels)
+    return NextResponse.json({
+      fullName: member?.full_name ?? metadata.full_name ?? '',
+      nickname: metadata.nickname ?? '',
+      avatarUrl: metadata.avatar_url ?? '',
+      email: authUser.user.email ?? member?.email ?? '',
+      role: member?.role_name ?? 'Membro',
+      points,
+      level: levelState.level,
+      levelName: levelState.levelName,
+      hasNextMilestone: levelState.hasNextMilestone,
+      currentLevelXp: levelState.currentLevelXp,
+      nextLevelXp: levelState.nextLevelXp,
+      progress: levelState.progress,
+      badges: badgesWithImages,
+    })
   } catch (error) { return fail(error) }
 }
 

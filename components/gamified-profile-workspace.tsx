@@ -6,7 +6,7 @@ import { createClient } from '@/lib/supabase/client'
 import { BadgeDisplay } from '@/components/gamification/badge-display'
 
 type Badge = { id: string; name: string; description: string; color: string; image_url?: string | null; image_path?: string | null; granted_at: string; expires_at?: string | null; is_temporary?: boolean }
-type Profile = { fullName: string; nickname: string; email: string; avatarUrl: string; role: string; points: number; level: number; nextLevelXp?: number; currentLevelXp?: number; levelName?: string; hasNextMilestone?: boolean; badges: Badge[] }
+type Profile = { fullName: string; nickname: string; email: string; avatarUrl: string; role: string; points: number; level: number; nextLevelXp?: number; currentLevelXp?: number; levelName?: string; hasNextMilestone?: boolean; progress?: number; badges: Badge[] }
 
 export function GamifiedProfileWorkspace({ initialName = '' }: { initialName?: string }) {
   const [profile, setProfile] = useState<Profile>({ fullName: initialName, nickname: '', email: '', avatarUrl: '', role: 'Membro', points: 0, level: 1, badges: [] })
@@ -47,7 +47,7 @@ export function GamifiedProfileWorkspace({ initialName = '' }: { initialName?: s
   const initials = (profile.nickname || profile.fullName || 'U').split(/\s+/).slice(0, 2).map((part) => part[0]).join('').toUpperCase()
   const currentLevelXp = profile.currentLevelXp ?? 0
   const nextLevelXp = profile.nextLevelXp ?? Math.max(currentLevelXp + 1, profile.points + 1)
-  const progress = Math.min(100, Math.max(0, Math.round((profile.points - currentLevelXp) / Math.max(1, nextLevelXp - currentLevelXp) * 100)))
+  const progress = profile.progress ?? Math.min(100, Math.max(0, Math.round((profile.points - currentLevelXp) / Math.max(1, nextLevelXp - currentLevelXp) * 100)))
   return <div className="mt-6 space-y-5">
     <section className="relative overflow-hidden rounded-2xl border border-violet-300/20 bg-[radial-gradient(circle_at_80%_0%,rgba(124,92,246,.28),transparent_35%),linear-gradient(135deg,#17172a,#10151f)] p-5 sm:p-7">
       <div className="absolute -right-16 -top-16 size-48 rounded-full bg-cyan-300/10 blur-3xl" />

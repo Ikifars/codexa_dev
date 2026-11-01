@@ -212,7 +212,7 @@ function DashboardContent({ initialSection = 'Dashboard', page, permissions, pro
         const user = (await createClient().auth.getUser()).data.user
         if (user) {
           const loadedNotifications = (data ?? []) as WorkspaceNotification[]
-        const taskIds = loadedNotifications.filter((item: WorkspaceNotification) => item.notification_type === 'task_share' || item.notification_type === 'task_transfer').map((item: WorkspaceNotification) => item.entity_id).filter(Boolean)
+        const taskIds = loadedNotifications.filter((item: WorkspaceNotification) => ['task_share_request', 'task_transfer_request', 'task_share', 'task_transfer'].includes(item.notification_type)).map((item: WorkspaceNotification) => item.entity_id).filter(Boolean)
           const pending = taskIds.length ? await createClient().from('task_transfer_requests').select('task_id').eq('target_id', user.id).eq('status', 'pending').in('task_id', taskIds) : { data: [] }
           setActionableNotificationIds(((pending.data ?? []) as { task_id: string }[]).map((item) => loadedNotifications.find((notification: WorkspaceNotification) => notification.entity_id === item.task_id)?.id).filter(Boolean) as string[])
         }
@@ -258,19 +258,13 @@ function DashboardContent({ initialSection = 'Dashboard', page, permissions, pro
     const { data: userData } = await supabase.auth.getUser()
     const userId = userData.user?.id
     if (!userId) return
-    const { data: request } = await supabase.from('task_transfer_requests').select('id,requester_id,request_type').eq('task_id', notification.entity_id).eq('target_id', userId).eq('status', 'pending').order('created_at', { ascending: false }).maybeSingle()
-    if (!request) return
-    const { error } = await supabase.from('task_transfer_requests').update({ status, responded_at: new Date().toISOString() }).eq('id', request.id).eq('target_id', userId)
-    if (error) return
-    if (status === 'accepted') {
-      if (request.request_type === 'transfer') await supabase.from('project_tasks').update({ responsible_id: userId }).eq('id', notification.entity_id)
-      else {
-        const { data: task } = await supabase.from('project_tasks').select('participants').eq('id', notification.entity_id).maybeSingle()
-        const participants = Array.isArray(task?.participants) ? task.participants : []
-        await supabase.from('project_tasks').update({ participants: Array.from(new Set([...participants, userId])) }).eq('id', notification.entity_id)
-      }
+    const { data: request, error: requestError } = await supabase.from('task_transfer_requests').select('id').eq('task_id', notification.entity_id).eq('target_id', userId).eq('status', 'pending').order('created_at', { ascending: false }).maybeSingle()
+    if (requestError || !request) return
+    const { error } = await supabase.rpc('respond_task_transfer_request', { p_request_id: request.id, p_status: status })
+    if (error) {
+      setNotificationsError('Não foi possível responder à solicitação de tarefa.')
+      return
     }
-    await supabase.from('notifications').insert({ recipient_id: request.requester_id, notification_type: `task_${status}`, message: `Sua solicitação de ${request.request_type === 'share' ? 'compartilhamento' : 'transferência'} foi ${status === 'accepted' ? 'aceita' : 'recusada'}.`, entity_type: 'task', entity_id: notification.entity_id, link_path: notification.link_path })
     await markNotificationRead(notification)
     await loadNotifications()
   }
@@ -386,7 +380,7 @@ function DashboardContent({ initialSection = 'Dashboard', page, permissions, pro
           {['Propostas', 'Contratos'].includes(activeSection) && <div id="commercial-workspace" className="scroll-mt-24"><CommercialWorkspace initialTab={activeSection === 'Contratos' ? 'contracts' : 'proposals'} permissions={permissions} /></div>}
           {['Projetos', 'Solicitações de alteração', 'Suporte'].includes(activeSection) && <div id="operations-workspace" className="scroll-mt-24"><OperationsWorkspace permissions={permissions} initialModule={activeSection === 'Suporte' ? 'support_tickets' : activeSection === 'Solicitações de alteração' ? 'change_requests' : 'projects'} /></div>}
           {['Sistemas dos clientes', 'Módulos'].includes(activeSection) && <div id="catalog-workspace" className="scroll-mt-24"><CatalogWorkspace initialTab={activeSection === 'Módulos' ? 'modules' : 'systems'} /></div>}
-          {['Contas a receber', 'Contas a pagar', 'Fluxo de caixa', 'Transações', 'Categorias financeiras'].includes(activeSection) && <div id="finance-workspace" className="scroll-mt-24"><FinanceWorkspace initialTab={activeSection === 'Contas a receber' ? 'receivable' : activeSection === 'Contas a pagar' ? 'payable' : 'overview'} permissions={permissions} /></div>}
+          {['Contas a receber', 'Contas a pagar', 'Fluxo de caixa', 'Transações', 'Categorias financeiras'].includes(activeSection) && <div id="finance-workspace" className="scroll-mt-24"><FinanceWorkspace initialTab={activeSection === 'Contas a receber' ? 'receivable' : activeSection === 'Contas a pagar' ? 'payable' : activeSection === 'Fluxo de caixa' ? 'cashflow' : 'overview'} permissions={permissions} /></div>}
           {activeSection === 'Relatórios' && <div id="reports-workspace" className="scroll-mt-24"><ReportsWorkspace permissions={permissions} /></div>}
           {['Equipe', 'Configurações'].includes(activeSection) && <div id="admin-workspace" className="scroll-mt-24"><AdminWorkspace section={activeSection} permissions={permissions} /></div>}
           {activeSection === 'Configuração de XP' && <XpSettingsWorkspace />}

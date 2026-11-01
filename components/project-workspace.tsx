@@ -97,13 +97,8 @@ function priorityTone(priority: string) {
 
 export function ProjectWorkspace({ projectId, permissions }: { projectId: string; permissions: string[] }) {
   const supabase = useMemo(() => createClient(), [])
-  const canCreateTasks = permissions.includes('*') || permissions.includes('projects:create')
-  const canUpdateTasks = permissions.includes('*') || permissions.includes('projects:update')
-  const canDeleteTasks = permissions.includes('*') || permissions.includes('projects:delete')
-  const canEditProject = permissions.includes('*') || permissions.includes('projects:update')
-  const canDeleteProject = permissions.includes('*') || permissions.includes('projects:delete')
-  const canAssign = permissions.includes('*') || permissions.includes('projects:assign')
   const [project, setProject] = useState<Project | null>(null)
+  const [projectAccessLevel, setProjectAccessLevel] = useState<'viewer' | 'collaborator' | 'manager' | null>(null)
   const [tasks, setTasks] = useState<ProjectTask[]>([])
   const [members, setMembers] = useState<TeamMember[]>([])
   const [clients, setClients] = useState<Client[]>([])
@@ -129,16 +124,26 @@ export function ProjectWorkspace({ projectId, permissions }: { projectId: string
   const [currentUserId, setCurrentUserId] = useState('')
   const [notice, setNotice] = useState('')
 
+  const hasPermission = (action: string) => permissions.includes('*') || permissions.includes(`projects:${action}`)
+  const canCreateTasks = hasPermission('create') && (projectAccessLevel === 'collaborator' || projectAccessLevel === 'manager')
+  const canUpdateTasks = hasPermission('update') && (projectAccessLevel === 'collaborator' || projectAccessLevel === 'manager')
+  const canDeleteTasks = hasPermission('delete') && projectAccessLevel === 'manager'
+  const canEditProject = hasPermission('update') && projectAccessLevel === 'manager'
+  const canArchiveProject = hasPermission('archive') && projectAccessLevel === 'manager'
+  const canDeleteProject = hasPermission('delete') && projectAccessLevel === 'manager'
+  const canAssign = hasPermission('assign') && projectAccessLevel === 'manager'
+
   const loadData = useCallback(async () => {
     setLoading(true)
     setError('')
     const { data: authData } = await supabase.auth.getUser()
-    const [projectResult, taskResult, memberResult, clientResult, activityResult] = await Promise.all([
+    const [projectResult, taskResult, memberResult, clientResult, activityResult, accessResult] = await Promise.all([
       supabase.from('projects').select('id,name,description,status,priority,due_date,completed_at,created_at,client_id,responsible_id,client:clients(id,legal_name,trade_name)').eq('id', projectId).maybeSingle(),
       supabase.from('project_tasks').select('id,project_id,title,description,status,priority,due_date,responsible_id,participants,created_at,updated_at').eq('project_id', projectId).order('created_at', { ascending: true }),
       supabase.from('team_members').select('id,user_id,full_name,email,status').order('full_name'),
       supabase.from('clients').select('id,legal_name,trade_name').order('legal_name'),
       supabase.from('project_activity').select('id,project_id,task_id,actor_id,event_type,summary,metadata,created_at').eq('project_id', projectId).order('created_at', { ascending: false }).limit(100),
+      supabase.rpc('project_access_level', { p_project_id: projectId }),
     ])
 
     if (projectResult.error) {
@@ -178,12 +183,14 @@ export function ProjectWorkspace({ projectId, permissions }: { projectId: string
       setTaskIndicators({})
     }
     setProject(projectResult.data as Project)
+    setProjectAccessLevel(accessResult.error ? null : accessResult.data as 'viewer' | 'collaborator' | 'manager' | null)
     setTasks((taskResult.data ?? []) as ProjectTask[])
     setMembers((memberResult.data ?? []) as TeamMember[])
     setClients((clientResult.data ?? []) as Client[])
     setActivity((activityResult.data ?? []) as ProjectActivity[])
     setActivityError(activityResult.error?.message ?? '')
     if (memberResult.error) setError(memberResult.error.message)
+    if (accessResult.error) setError('Aplique a migration de compartilhamento de projetos para validar o nível de acesso.')
     setCurrentUserId(authData.user?.id ?? '')
     setLoading(false)
   }, [projectId, supabase])
@@ -342,7 +349,7 @@ export function ProjectWorkspace({ projectId, permissions }: { projectId: string
   }
 
   async function archiveProject() {
-    if (!canEditProject || !project || !window.confirm(`Arquivar o projeto �����${project.name}”?`)) return
+    if (!canArchiveProject || !project || !window.confirm(`Arquivar o projeto “${project.name}”?`)) return
     const { error: updateError } = await supabase.from('projects').update({ status: 'Arquivado' }).eq('id', project.id)
     if (updateError) {
       setError(updateError.message)
@@ -475,8 +482,8 @@ export function ProjectWorkspace({ projectId, permissions }: { projectId: string
           </div>
           <div className="flex shrink-0 flex-wrap gap-2">
             {canCreateTasks && <button onClick={() => { setTaskModal({ open: true, task: null, status: 'Backlog' }); setCommentItems([]) }} className="flex min-h-10 items-center gap-2 rounded-lg bg-blue-500 px-3.5 text-sm font-semibold text-white hover:bg-blue-400"><Plus className="size-4" />Adicionar tarefa</button>}
-            {canEditProject && <><button onClick={() => setEditProjectOpen(true)} className="flex min-h-10 items-center gap-2 rounded-lg border border-white/[0.1] bg-white/[0.03] px-3 text-sm font-medium text-slate-200 hover:bg-white/[0.07]"><FileText className="size-4" />Editar</button>
-            <button onClick={() => void archiveProject()} disabled={normalize(project.status) === 'arquivado'} className="min-h-10 rounded-lg border border-white/[0.1] px-3 text-sm text-slate-400 hover:text-white disabled:opacity-50">Arquivar</button></>}
+            {canEditProject && <button onClick={() => setEditProjectOpen(true)} className="flex min-h-10 items-center gap-2 rounded-lg border border-white/[0.1] bg-white/[0.03] px-3 text-sm font-medium text-slate-200 hover:bg-white/[0.07]"><FileText className="size-4" />Editar</button>}
+            {canArchiveProject && <button onClick={() => void archiveProject()} disabled={normalize(project.status) === 'arquivado'} className="min-h-10 rounded-lg border border-white/[0.1] px-3 text-sm text-slate-400 hover:text-white disabled:opacity-50">Arquivar</button>}
             {canDeleteProject && <button onClick={() => void deleteProject()} className="flex min-h-10 items-center gap-2 rounded-lg border border-rose-400/20 px-3 text-sm text-rose-200 hover:bg-rose-400/10"><Trash2 className="size-4" />Excluir</button>}
           </div>
         </div>
