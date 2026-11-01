@@ -71,6 +71,7 @@ const moduleLabels: Record<string, string> = {
 
 const actionLabels: Record<string, string> = {
   view: 'Visualizar', create: 'Criar', update: 'Editar', delete: 'Excluir', manage: 'Gerenciar',
+  archive: 'Arquivar', share: 'Compartilhar',
   approve: 'Aprovar', export: 'Exportar', upload: 'Enviar arquivos', download: 'Baixar arquivos',
   assign: 'Atribuir', change_status: 'Alterar status', manage_licenses: 'Gerenciar licenças',
   release_modules: 'Liberar módulos', manage_users: 'Gerenciar usuários', manage_roles: 'Gerenciar cargos',
@@ -214,6 +215,7 @@ export function RoleManagementWorkspace({ initialView = 'roles' }: { initialView
 
   async function saveRole(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
+    if (!creatingRole && !window.confirm(`Salvar as alterações do cargo ${roleName}?`)) return
     setSaving(true)
     setError('')
     setNotice('')
@@ -298,6 +300,8 @@ export function RoleManagementWorkspace({ initialView = 'roles' }: { initialView
   }
 
   async function updateMemberOverride(memberId: string, module: string, action: string, effect: Override['effect']) {
+    const effectLabel = effect === 'inherit' ? 'restaurar a herança do cargo' : effect === 'allow' ? 'conceder' : 'restringir'
+    if (!window.confirm(`Confirmar ${effectLabel} a permissão ${actionLabels[action] ?? action} em ${moduleLabels[module] ?? module}?`)) return
     try {
       await api(`/api/admin/rbac/users/${memberId}/permissions`, { method: 'PATCH', body: JSON.stringify({ module, action, effect }) })
       await loadMemberOverrides(memberId)
@@ -306,6 +310,10 @@ export function RoleManagementWorkspace({ initialView = 'roles' }: { initialView
   }
 
   async function updateMember(member: Member, patch: { roleName?: string; status?: string }) {
+    const changeLabel = patch.roleName
+      ? `alterar o cargo de ${member.full_name} para ${patch.roleName}`
+      : `alterar o status de ${member.full_name} para ${patch.status}`
+    if (!window.confirm(`Confirmar ${changeLabel}?`)) return
     setError('')
     setNotice('')
     try {

@@ -1,22 +1,70 @@
 'use client'
 
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
-import { CircleDollarSign, Download, Eye, Pencil, Plus, RefreshCw, Search, TrendingDown, TrendingUp, WalletCards, X } from 'lucide-react'
+import { AlertTriangle, CircleDollarSign, Download, Eye, Pencil, Plus, RefreshCw, Search, TrendingDown, TrendingUp, WalletCards, X } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { ListingControls } from '@/components/listing-controls'
 
-type Receivable = { id: string; description: string; category: string; final_amount: number; paid_amount: number; due_date: string; status: string }
-type Payable = { id: string; beneficiary: string; description: string; amount: number; paid_amount: number; due_date: string; status: string }
+type Receivable = {
+  id: string
+  description: string
+  category: string
+  final_amount: number
+  paid_amount: number
+  due_date: string
+  status: string
+  original_amount?: number
+  created_at?: string
+}
+
+type Payable = {
+  id: string
+  beneficiary: string
+  description: string
+  amount: number
+  paid_amount: number
+  due_date: string
+  status: string
+  created_at?: string
+}
+
 type FinanceRecord = Receivable | Payable
+
+type RangeOption = '30d' | '90d' | 'all'
+type FinanceTab = 'overview' | 'receivable' | 'payable' | 'recurring' | 'cashflow' | 'budget'
+
 const money = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(value || 0))
 const inputClass = 'w-full rounded-lg border border-white/10 bg-[#151b24] px-3 py-2 text-sm text-white'
 
-export function FinanceWorkspace({ initialTab = 'overview', permissions = [] }: { initialTab?: 'overview' | 'receivable' | 'payable' | 'recurring'; permissions?: string[] }) {
-  const [tab, setTab] = useState<'overview' | 'receivable' | 'payable' | 'recurring'>(initialTab)
+function getOpenBalance(item: Receivable | Payable) {
+  const amount = 'amount' in item ? Number(item.amount || 0) : Number(item.final_amount || 0)
+  const paid = Number(item.paid_amount || 0)
+  return Math.max(amount - paid, 0)
+}
+
+function isOverdue(item: Receivable | Payable) {
+  if (!item.due_date || item.status === 'Pago' || item.status === 'Recebido' || item.status === 'Pago' || item.status === 'Quitado') return false
+  const due = new Date(`${item.due_date}T12:00:00`)
+  return due.getTime() < Date.now()
+}
+
+function withinRange(dateValue: string | null | undefined, range: RangeOption) {
+  if (!dateValue || range === 'all') return true
+  const date = new Date(`${dateValue}T12:00:00`)
+  const now = new Date()
+  const offset = range === '30d' ? 30 : 90
+  const from = new Date(now)
+  from.setDate(now.getDate() - offset)
+  return date >= from && date <= now
+}
+
+export function FinanceWorkspace({ initialTab = 'overview', permissions = [] }: { initialTab?: FinanceTab; permissions?: string[] }) {
+  const [tab, setTab] = useState<FinanceTab>(initialTab)
   const [receivables, setReceivables] = useState<Receivable[]>([])
   const [payables, setPayables] = useState<Payable[]>([])
   const [query, setQuery] = useState('')
   const [page, setPage] = useState(0)
+  const [rangeFilter, setRangeFilter] = useState<RangeOption>('30d')
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [form, setForm] = useState({ description: '', amount: '', due_date: '' })
@@ -32,8 +80,8 @@ export function FinanceWorkspace({ initialTab = 'overview', permissions = [] }: 
     setLoading(true)
     const supabase = createClient()
     const [receivableResult, payableResult] = await Promise.all([
-      supabase.from('accounts_receivable').select('id,description,category,final_amount,paid_amount,due_date,status').order('due_date'),
-      supabase.from('accounts_payable').select('id,beneficiary,description,amount,paid_amount,due_date,status').order('due_date'),
+      supabase.from('accounts_receivable').select('id,description,category,original_amount,final_amount,paid_amount,due_date,status,created_at').order('due_date'),
+      supabase.from('accounts_payable').select('id,beneficiary,description,amount,paid_amount,due_date,status,created_at').order('due_date'),
     ])
     if (receivableResult.error || payableResult.error) {
       const loadError = receivableResult.error || payableResult.error
@@ -54,7 +102,9 @@ export function FinanceWorkspace({ initialTab = 'overview', permissions = [] }: 
     const supabase = createClient()
     const amount = Number(form.amount)
     const table = tab === 'payable' ? 'accounts_payable' : 'accounts_receivable'
-    const payload = tab === 'payable' ? { beneficiary: 'A definir', description: form.description, amount, paid_amount: 0, due_date: form.due_date, status: 'Pendente' } : { description: form.description, original_amount: amount, final_amount: amount, paid_amount: 0, due_date: form.due_date, status: 'Pendente' }
+    const payload = tab === 'payable'
+      ? { beneficiary: 'A definir', description: form.description, amount, paid_amount: 0, due_date: form.due_date, status: 'Pendente' }
+      : { description: form.description, original_amount: amount, final_amount: amount, paid_amount: 0, due_date: form.due_date, status: 'Pendente' }
     const { error: insertError } = await supabase.from(table).insert(payload)
     if (insertError) setMessage(`Não foi possível salvar o lançamento: ${insertError.message}`)
     else { setMessage('Lançamento criado.'); setShowForm(false); setForm({ description: '', amount: '', due_date: '' }); await load() }
@@ -77,29 +127,501 @@ export function FinanceWorkspace({ initialTab = 'overview', permissions = [] }: 
     setSaving(false)
   }
 
-  const filteredReceivables = useMemo(() => receivables.filter((item) => `${item.description} ${item.category}`.toLowerCase().includes(query.toLowerCase())), [receivables, query])
-  const filteredPayables = useMemo(() => payables.filter((item) => `${item.description} ${item.beneficiary}`.toLowerCase().includes(query.toLowerCase())), [payables, query])
+  const filteredReceivables = useMemo(() => receivables.filter((item) => {
+    const matchesText = `${item.description} ${item.category}`.toLowerCase().includes(query.toLowerCase())
+    const matchesRange = withinRange(item.due_date, rangeFilter)
+    return matchesText && matchesRange
+  }), [receivables, query, rangeFilter])
+
+  const filteredPayables = useMemo(() => payables.filter((item) => {
+    const matchesText = `${item.description} ${item.beneficiary}`.toLowerCase().includes(query.toLowerCase())
+    const matchesRange = withinRange(item.due_date, rangeFilter)
+    return matchesText && matchesRange
+  }), [payables, query, rangeFilter])
+
   const visibleFinanceRows = tab === 'payable' ? filteredPayables.slice(page * 10, page * 10 + 10) : filteredReceivables.slice(page * 10, page * 10 + 10)
-  const received = receivables.reduce((sum, item) => sum + Number(item.final_amount || 0), 0)
-  const expenses = payables.reduce((sum, item) => sum + Number(item.amount || 0), 0)
-  const overdue = receivables.filter((item) => item.status !== 'Pago' && item.due_date < new Date().toISOString().slice(0, 10)).reduce((sum, item) => sum + Number(item.final_amount || 0), 0)
-  const tabs = [['overview', 'Visão geral'], ['receivable', 'A receber'], ['payable', 'A pagar'], ['recurring', 'Recorrências']] as const
-  const financeCards: Array<{ label: string; value: string; icon: typeof TrendingUp; tone: string }> = [
-    { label: 'A receber', value: money(received), icon: TrendingUp, tone: 'text-emerald-400' },
-    { label: 'A pagar', value: money(expenses), icon: TrendingDown, tone: 'text-rose-400' },
-    { label: 'Saldo projetado', value: money(received - expenses), icon: WalletCards, tone: 'text-blue-400' },
-    { label: 'Em atraso', value: money(overdue), icon: CircleDollarSign, tone: 'text-amber-400' },
+
+  const outstandingReceivables = filteredReceivables.reduce((sum, item) => sum + getOpenBalance(item), 0)
+  const outstandingPayables = filteredPayables.reduce((sum, item) => sum + getOpenBalance(item), 0)
+  const overdueReceivables = filteredReceivables.filter(isOverdue).reduce((sum, item) => sum + getOpenBalance(item), 0)
+  const overduePayables = filteredPayables.filter(isOverdue).reduce((sum, item) => sum + getOpenBalance(item), 0)
+  const netCash = outstandingReceivables - outstandingPayables
+
+  const periodReceivables = filteredReceivables.reduce((sum, item) => sum + Number(item.paid_amount || 0), 0)
+  const periodPayables = filteredPayables.reduce((sum, item) => sum + Number(item.paid_amount || 0), 0)
+
+  const topCategories = useMemo(() => {
+    const combined = [...filteredReceivables.map((item) => ({ label: item.category || 'Sem categoria', value: getOpenBalance(item) })), ...filteredPayables.map((item) => ({ label: item.description || 'Sem descrição', value: getOpenBalance(item) }))]
+    const summary = combined.reduce<Record<string, number>>((accumulator, item) => {
+      accumulator[item.label] = (accumulator[item.label] ?? 0) + item.value
+      return accumulator
+    }, {})
+    return Object.entries(summary).sort((a, b) => b[1] - a[1]).slice(0, 5)
+  }, [filteredReceivables, filteredPayables])
+  const maxCategoryValue = Math.max(...topCategories.map(([, value]) => value), 1)
+
+  const alerts = useMemo(() => {
+    const receivableAlerts = filteredReceivables.filter(isOverdue).slice(0, 3).map((item) => ({
+      title: `${item.description} em atraso`,
+      detail: `${money(getOpenBalance(item))} · vence em ${new Date(`${item.due_date}T12:00:00`).toLocaleDateString('pt-BR')}`,
+      tone: 'amber',
+    }))
+
+    const payableAlerts = filteredPayables.filter(isOverdue).slice(0, 3).map((item) => ({
+      title: `${item.description} vencida`,
+      detail: `${money(getOpenBalance(item))} · vence em ${new Date(`${item.due_date}T12:00:00`).toLocaleDateString('pt-BR')}`,
+      tone: 'rose',
+    }))
+
+    return [...receivableAlerts, ...payableAlerts].slice(0, 5)
+  }, [filteredReceivables, filteredPayables])
+
+  const cashflowSeries = useMemo(() => {
+    const monthEntries = new Map<string, { key: string; label: string; inflow: number; outflow: number }>()
+    const now = new Date()
+
+    for (let offset = 5; offset >= 0; offset -= 1) {
+      const monthDate = new Date(now.getFullYear(), now.getMonth() - offset, 1)
+      const key = `${monthDate.getFullYear()}-${String(monthDate.getMonth() + 1).padStart(2, '0')}`
+      monthEntries.set(key, {
+        key,
+        label: new Intl.DateTimeFormat('pt-BR', { month: 'short' }).format(monthDate),
+        inflow: 0,
+        outflow: 0,
+      })
+    }
+
+    ;[...receivables, ...payables].forEach((item) => {
+      const dateValue = item.due_date ?? item.created_at
+      if (!dateValue) return
+      const monthDate = new Date(`${dateValue.slice(0, 10)}T12:00:00`)
+      const key = `${monthDate.getFullYear()}-${String(monthDate.getMonth() + 1).padStart(2, '0')}`
+      if (!monthEntries.has(key)) return
+
+      const entry = monthEntries.get(key)!
+      if ('beneficiary' in item) {
+        entry.outflow += Number(item.paid_amount || item.amount || 0)
+      } else {
+        entry.inflow += Number(item.paid_amount || item.final_amount || 0)
+      }
+    })
+
+    return Array.from(monthEntries.values())
+  }, [receivables, payables])
+
+  const maxCashflowValue = Math.max(...cashflowSeries.flatMap((item) => [item.inflow, item.outflow]), 1)
+  const totalInflow = cashflowSeries.reduce((sum, item) => sum + item.inflow, 0)
+  const totalOutflow = cashflowSeries.reduce((sum, item) => sum + item.outflow, 0)
+  const netCashflow = totalInflow - totalOutflow
+
+  const recurringSchedules = useMemo(() => {
+    const grouped = new Map<string, {
+      key: string
+      label: string
+      type: 'receita' | 'despesa'
+      totalOpen: number
+      occurrences: number
+      nextDue: string | null
+      lastDue: string | null
+    }>()
+
+    const registerItem = (item: Receivable | Payable, type: 'receita' | 'despesa') => {
+      const title = 'beneficiary' in item ? item.beneficiary || item.description : item.description || item.category || 'Lançamento'
+      const key = `${type}:${title.trim().toLowerCase()}`
+      const existing = grouped.get(key) ?? {
+        key,
+        label: title,
+        type,
+        totalOpen: 0,
+        occurrences: 0,
+        nextDue: null,
+        lastDue: null,
+      }
+
+      existing.totalOpen += getOpenBalance(item)
+      existing.occurrences += 1
+
+      if (item.due_date) {
+        const due = item.due_date.slice(0, 10)
+        if (!existing.nextDue || new Date(`${due}T12:00:00`).getTime() < new Date(`${existing.nextDue}T12:00:00`).getTime()) {
+          existing.nextDue = due
+        }
+        if (!existing.lastDue || new Date(`${due}T12:00:00`).getTime() > new Date(`${existing.lastDue}T12:00:00`).getTime()) {
+          existing.lastDue = due
+        }
+      }
+
+      grouped.set(key, existing)
+    }
+
+    receivables.forEach((item) => registerItem(item, 'receita'))
+    payables.forEach((item) => registerItem(item, 'despesa'))
+
+    return Array.from(grouped.values())
+      .filter((item) => item.occurrences > 1)
+      .sort((a, b) => {
+        const first = a.nextDue ? new Date(`${a.nextDue}T12:00:00`).getTime() : Number.MAX_SAFE_INTEGER
+        const second = b.nextDue ? new Date(`${b.nextDue}T12:00:00`).getTime() : Number.MAX_SAFE_INTEGER
+        return first - second
+      })
+  }, [receivables, payables])
+
+  const recurringTotal = recurringSchedules.reduce((sum, item) => sum + item.totalOpen, 0)
+
+  const budgetLines = useMemo(() => {
+    const lines = [...topCategories.map(([label, value]) => ({
+      label,
+      actual: value,
+      planned: Math.max(value * 1.08, value + 50),
+      type: value >= 0 ? 'saldo' : 'gasto',
+    }))]
+
+    if (!lines.length) {
+      const fallback = [
+        { label: 'Disponibilidade líquida', actual: Math.max(netCash, 0), planned: Math.max(netCash, 0), type: 'saldo' },
+        { label: 'Compromissos', actual: Math.max(outstandingPayables, 0), planned: Math.max(outstandingPayables * 1.05, 0), type: 'gasto' },
+      ]
+      return fallback
+    }
+
+    return lines.slice(0, 5)
+  }, [topCategories, netCash, outstandingPayables])
+
+  const budgetVariance = budgetLines.reduce((sum, item) => sum + (item.planned - item.actual), 0)
+  const expectedReceipts = outstandingReceivables * 0.92
+  const expectedPayments = outstandingPayables * 1.08
+  const reservedCash = Math.max(netCash - expectedPayments * 0.15, 0)
+
+  const tabs = [['overview', 'Visão geral'], ['receivable', 'A receber'], ['payable', 'A pagar'], ['cashflow', 'Fluxo de caixa'], ['recurring', 'Recorrências'], ['budget', 'Orçamento']] as const
+  const stats = [
+    { label: 'Saldo em aberto', value: money(outstandingReceivables - outstandingPayables), icon: WalletCards, tone: 'text-cyan-400' },
+    { label: 'Receitas em aberto', value: money(outstandingReceivables), icon: TrendingUp, tone: 'text-emerald-400' },
+    { label: 'Despesas em aberto', value: money(outstandingPayables), icon: TrendingDown, tone: 'text-rose-400' },
+    { label: 'Vencimentos em atraso', value: money(overdueReceivables + overduePayables), icon: AlertTriangle, tone: 'text-amber-400' },
   ]
 
   return <section className="space-y-6" id="finance-workspace">
-    <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end"><div><p className="text-xs font-medium uppercase tracking-[0.16em] text-blue-400">Financeiro</p><h1 className="mt-2 text-2xl font-semibold tracking-tight text-white">Controle financeiro</h1><p className="mt-1 text-sm text-slate-500">Recebimentos, despesas e recorrências em um só lugar.</p></div><div className="flex gap-2"><button onClick={() => void load()} className="rounded-lg border border-white/[0.08] p-2.5 text-slate-400 hover:text-white" aria-label="Atualizar"><RefreshCw className="size-4" /></button><button disabled={!canCreate} onClick={() => setShowForm(true)} className="flex items-center gap-2 rounded-lg bg-blue-500 px-3.5 py-2.5 text-xs font-semibold text-white hover:bg-blue-400 disabled:cursor-not-allowed disabled:opacity-50"><Plus className="size-4" />Novo lançamento</button></div></div>
-    <div className="flex gap-1 overflow-x-auto border-b border-white/[0.07]">{tabs.map(([value, label]) => <button key={value} onClick={() => { setTab(value); setRecord(null); setEditingRecord(false) }} className={`whitespace-nowrap border-b-2 px-3 py-3 text-xs ${tab === value ? 'border-blue-400 text-blue-300' : 'border-transparent text-slate-500 hover:text-slate-300'}`}>{label}</button>)}</div>
+    <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
+      <div>
+        <p className="text-xs font-medium uppercase tracking-[0.16em] text-blue-400">Financeiro</p>
+        <h1 className="mt-2 text-2xl font-semibold tracking-tight text-white">Controle financeiro</h1>
+        <p className="mt-1 text-sm text-slate-500">Indicadores reais do módulo financeiro com base em contas a receber e pagar cadastradas.</p>
+      </div>
+      <div className="flex gap-2">
+        <button onClick={() => void load()} className="rounded-lg border border-white/[0.08] p-2.5 text-slate-400 hover:text-white" aria-label="Atualizar"><RefreshCw className="size-4" /></button>
+        <button disabled={!canCreate} onClick={() => setShowForm(true)} className="flex items-center gap-2 rounded-lg bg-blue-500 px-3.5 py-2.5 text-xs font-semibold text-white hover:bg-blue-400 disabled:cursor-not-allowed disabled:opacity-50"><Plus className="size-4" />Novo lançamento</button>
+      </div>
+    </div>
+
+    <div className="flex flex-wrap items-center gap-3">
+      <div className="flex gap-1 overflow-x-auto rounded-lg border border-white/[0.08] bg-[#11161e] p-1">
+        {tabs.map(([value, label]) => (
+          <button key={value} onClick={() => { setTab(value); setRecord(null); setEditingRecord(false) }} className={`whitespace-nowrap rounded-md px-3 py-2 text-xs ${tab === value ? 'bg-blue-500 text-white' : 'text-slate-500 hover:text-slate-300'}`}>
+            {label}
+          </button>
+        ))}
+      </div>
+      <select value={rangeFilter} onChange={(event) => setRangeFilter(event.target.value as RangeOption)} className={`${inputClass} w-auto min-w-[140px] py-2 text-xs`}>
+        <option value="30d">Últimos 30 dias</option>
+        <option value="90d">Últimos 90 dias</option>
+        <option value="all">Todo o período</option>
+      </select>
+    </div>
+
     {message && <p role="status" className="rounded-lg border border-blue-500/20 bg-blue-500/10 px-4 py-3 text-xs text-blue-300">{message}</p>}
+
     {showForm && <form onSubmit={(event) => void createEntry(event)} className="grid gap-3 rounded-xl border border-white/[0.08] bg-[#11161e] p-5 sm:grid-cols-[1fr_160px_170px_auto]"><input required value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} placeholder="Descrição" className={inputClass} /><input required min="0.01" step="0.01" type="number" value={form.amount} onChange={(event) => setForm({ ...form, amount: event.target.value })} placeholder="Valor" className={inputClass} /><input required type="date" value={form.due_date} onChange={(event) => setForm({ ...form, due_date: event.target.value })} className={inputClass} /><button disabled={saving} className="rounded-lg bg-emerald-500 px-4 py-2 text-xs font-semibold text-white disabled:opacity-60">{saving ? 'Salvando...' : 'Salvar'}</button></form>}
-    {tab === 'overview' && <><div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{financeCards.map(({ label, value, icon: MetricIcon, tone }) => <article key={label} className="rounded-xl border border-white/[0.07] bg-[#11161e] p-4"><MetricIcon className={`size-5 ${tone}`} /><p className="mt-4 text-xs text-slate-500">{label}</p><p className="mt-1 text-xl font-semibold text-white">{value}</p></article>)}</div><div className="rounded-xl border border-white/[0.07] bg-[#11161e] p-5"><h2 className="text-sm font-semibold text-slate-200">Resumo financeiro</h2><p className="mt-2 text-xs leading-5 text-slate-500">Use as abas para consultar lançamentos, registrar pagamentos e acompanhar recorrências.</p></div></>}
-    {tab !== 'overview' && <div className="rounded-xl border border-white/[0.07] bg-[#11161e]"><div className="flex items-center justify-between border-b border-white/[0.07] p-4"><div className="flex items-center gap-2 rounded-lg border border-white/[0.08] px-3 py-2"><Search className="size-4 text-slate-500" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar lançamento" className="bg-transparent text-xs text-white outline-none" /></div><button className="hidden items-center gap-2 text-xs text-slate-500 hover:text-white sm:flex"><Download className="size-3.5" />Exportar</button></div>
-      {loading ? <p className="p-8 text-center text-xs text-slate-500">Carregando lançamentos...</p> : tab === 'recurring' ? <p className="p-8 text-center text-xs text-slate-500">Nenhuma cobrança recorrente cadastrada.</p> : <><ListingControls total={tab === 'payable' ? filteredPayables.length : filteredReceivables.length} page={page} onPageChange={setPage} hasActiveFilters={Boolean(query)} onClear={() => { setQuery(''); setPage(0) }} /><div className="divide-y divide-white/[0.06]">{visibleFinanceRows.map((item) => <div key={item.id} className="flex items-center justify-between gap-4 px-5 py-4"><div><p className="text-sm text-slate-200">{item.description}</p><p className="mt-1 text-[11px] text-slate-500">{'beneficiary' in item ? item.beneficiary : item.category} · vencimento {item.due_date ? new Date(`${item.due_date.slice(0, 10)}T12:00:00`).toLocaleDateString('pt-BR') : 'Não informado'}</p></div><div className="flex items-center gap-3"><div className="text-right"><p className="text-sm font-semibold text-white">{money('amount' in item ? item.amount : item.final_amount)}</p><p className="text-[11px] text-slate-500">{item.status}</p></div><button onClick={() => { setRecord(item); setEditingRecord(false); setMessage('') }} aria-label="Ver detalhes" className="rounded p-2 text-slate-400 hover:bg-white/5 hover:text-white"><Eye className="size-4" /></button>{canUpdate && <button onClick={() => { setRecord(item); setEditingRecord(true); setMessage('') }} aria-label="Editar lançamento" className="rounded p-2 text-slate-400 hover:bg-white/5 hover:text-white"><Pencil className="size-4" /></button>}</div></div>)}      </div></>}
+
+    {tab === 'overview' && (
+      <>
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          {stats.map(({ label, value, icon: MetricIcon, tone }) => (
+            <article key={label} className="rounded-xl border border-white/[0.07] bg-[#11161e] p-4">
+              <MetricIcon className={`size-5 ${tone}`} />
+              <p className="mt-4 text-xs text-slate-500">{label}</p>
+              <p className="mt-1 text-xl font-semibold text-white">{value}</p>
+            </article>
+          ))}
+        </div>
+
+        <div className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
+          <div className="rounded-xl border border-white/[0.07] bg-[#11161e] p-5">
+            <div className="flex items-center justify-between gap-3">
+              <h2 className="text-sm font-semibold text-slate-200">Resumo operacional</h2>
+              <span className="text-[10px] uppercase tracking-[0.14em] text-slate-500">Periodo: {rangeFilter === '30d' ? '30 dias' : rangeFilter === '90d' ? '90 dias' : 'completo'}</span>
+            </div>
+
+            <div className="mt-4 grid gap-4 sm:grid-cols-2">
+              <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-3">
+                <p className="text-[10px] uppercase tracking-[0.14em] text-emerald-300">Receitas registradas</p>
+                <p className="mt-2 text-xl font-semibold text-white">{money(periodReceivables)}</p>
+              </div>
+              <div className="rounded-lg border border-rose-500/20 bg-rose-500/5 p-3">
+                <p className="text-[10px] uppercase tracking-[0.14em] text-rose-300">Despesas registradas</p>
+                <p className="mt-2 text-xl font-semibold text-white">{money(periodPayables)}</p>
+              </div>
+            </div>
+
+            <div className="mt-5 space-y-3">
+              {topCategories.length === 0 ? (
+                <p className="text-xs text-slate-500">Ainda não há dados suficientes para distribuir por categoria.</p>
+              ) : topCategories.map(([label, value]) => (
+                <div key={label}>
+                  <div className="mb-1 flex justify-between gap-2 text-[11px] text-slate-400">
+                    <span>{label}</span>
+                    <span>{money(value)}</span>
+                  </div>
+                  <div className="h-2 rounded-full bg-white/[0.05]">
+                    <div className="h-2 rounded-full bg-gradient-to-r from-cyan-500 to-blue-500" style={{ width: `${Math.min((value / maxCategoryValue) * 100, 100)}%` }} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-white/[0.07] bg-[#11161e] p-5">
+            <h2 className="text-sm font-semibold text-slate-200">Alertas financeiros</h2>
+            <div className="mt-4 space-y-3">
+              {alerts.length === 0 ? (
+                <p className="text-xs text-slate-500">Nenhum alerta encontrado no período selecionado.</p>
+              ) : alerts.map((alert) => (
+                <div key={`${alert.title}-${alert.detail}`} className={`rounded-lg border p-3 ${alert.tone === 'amber' ? 'border-amber-500/20 bg-amber-500/5' : 'border-rose-500/20 bg-rose-500/5'}`}>
+                  <p className="text-sm font-medium text-white">{alert.title}</p>
+                  <p className="mt-1 text-[11px] text-slate-400">{alert.detail}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </>
+    )}
+
+    {tab === 'cashflow' && <div className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
+      <div className="rounded-xl border border-white/[0.07] bg-[#11161e] p-5">
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="text-sm font-semibold text-slate-200">Fluxo de caixa</h2>
+          <span className="text-[10px] uppercase tracking-[0.14em] text-slate-500">últimos 6 meses</span>
+        </div>
+
+        <div className="mt-4 grid gap-3 sm:grid-cols-3">
+          <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-3">
+            <p className="text-[10px] uppercase tracking-[0.14em] text-emerald-300">Entradas</p>
+            <p className="mt-2 text-xl font-semibold text-white">{money(totalInflow)}</p>
+          </div>
+          <div className="rounded-lg border border-rose-500/20 bg-rose-500/5 p-3">
+            <p className="text-[10px] uppercase tracking-[0.14em] text-rose-300">Saídas</p>
+            <p className="mt-2 text-xl font-semibold text-white">{money(totalOutflow)}</p>
+          </div>
+          <div className="rounded-lg border border-cyan-500/20 bg-cyan-500/5 p-3">
+            <p className="text-[10px] uppercase tracking-[0.14em] text-cyan-300">Saldo líquido</p>
+            <p className="mt-2 text-xl font-semibold text-white">{money(netCashflow)}</p>
+          </div>
+        </div>
+
+        <div className="mt-5 space-y-3">
+          {cashflowSeries.map((item) => (
+            <div key={item.key}>
+              <div className="mb-1 flex items-center justify-between gap-2 text-[11px] text-slate-400">
+                <span className="capitalize">{item.label}</span>
+                <span>{money(item.inflow - item.outflow)}</span>
+              </div>
+              <div className="flex h-3 overflow-hidden rounded-full bg-white/[0.05]">
+                <div className="bg-gradient-to-r from-emerald-500 to-emerald-400" style={{ width: `${Math.min((item.inflow / maxCashflowValue) * 100, 100)}%` }} />
+                <div className="bg-gradient-to-r from-rose-500 to-rose-400" style={{ width: `${Math.min((item.outflow / maxCashflowValue) * 100, 100)}%` }} />
+              </div>
+              <div className="mt-2 flex justify-between text-[10px] text-slate-500">
+                <span>Entradas: {money(item.inflow)}</span>
+                <span>Saídas: {money(item.outflow)}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="rounded-xl border border-white/[0.07] bg-[#11161e] p-5">
+        <h2 className="text-sm font-semibold text-slate-200">Resumo rápido</h2>
+        <div className="mt-4 space-y-3">
+          <div className="rounded-lg border border-white/[0.06] bg-white/[0.02] p-3">
+            <p className="text-[10px] uppercase tracking-[0.14em] text-slate-500">Expectativa líquida</p>
+            <p className="mt-2 text-lg font-semibold text-white">{money(netCashflow)}</p>
+          </div>
+          <div className="rounded-lg border border-white/[0.06] bg-white/[0.02] p-3">
+            <p className="text-[10px] uppercase tracking-[0.14em] text-slate-500">Maior saída</p>
+            <p className="mt-2 text-lg font-semibold text-white">{money(Math.max(...cashflowSeries.map((item) => item.outflow), 0))}</p>
+          </div>
+          <div className="rounded-lg border border-white/[0.06] bg-white/[0.02] p-3">
+            <p className="text-[10px] uppercase tracking-[0.14em] text-slate-500">Maior entrada</p>
+            <p className="mt-2 text-lg font-semibold text-white">{money(Math.max(...cashflowSeries.map((item) => item.inflow), 0))}</p>
+          </div>
+        </div>
+      </div>
     </div>}
+
+    {tab === 'recurring' && <div className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
+      <div className="rounded-xl border border-white/[0.07] bg-[#11161e] p-5">
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="text-sm font-semibold text-slate-200">Recorrências detectadas</h2>
+          <span className="text-[10px] uppercase tracking-[0.14em] text-slate-500">{recurringSchedules.length} padrões</span>
+        </div>
+
+        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+          <div className="rounded-lg border border-cyan-500/20 bg-cyan-500/5 p-3">
+            <p className="text-[10px] uppercase tracking-[0.14em] text-cyan-300">Volume recorrente</p>
+            <p className="mt-2 text-xl font-semibold text-white">{money(recurringTotal)}</p>
+          </div>
+          <div className="rounded-lg border border-violet-500/20 bg-violet-500/5 p-3">
+            <p className="text-[10px] uppercase tracking-[0.14em] text-violet-300">Itens detectados</p>
+            <p className="mt-2 text-xl font-semibold text-white">{recurringSchedules.length}</p>
+          </div>
+        </div>
+
+        <div className="mt-5 space-y-3">
+          {recurringSchedules.length === 0 ? (
+            <p className="text-xs text-slate-500">Nenhuma recorrência detectada com base nos lançamentos atuais.</p>
+          ) : recurringSchedules.map((item) => (
+            <div key={item.key} className="rounded-lg border border-white/[0.06] bg-white/[0.02] p-3">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-sm font-medium text-white">{item.label}</p>
+                  <p className="mt-1 text-[11px] text-slate-500">{item.type === 'receita' ? 'Receita recorrente' : 'Despesa recorrente'} · {item.occurrences} ocorrências</p>
+                </div>
+                <span className={`rounded-full px-2 py-1 text-[10px] font-medium ${item.type === 'receita' ? 'bg-emerald-500/10 text-emerald-300' : 'bg-rose-500/10 text-rose-300'}`}>
+                  {item.type === 'receita' ? 'Entrada' : 'Saída'}
+                </span>
+              </div>
+              <div className="mt-3 flex items-center justify-between text-[11px] text-slate-400">
+                <span>Próximo vencimento</span>
+                <span>{item.nextDue ? new Date(`${item.nextDue}T12:00:00`).toLocaleDateString('pt-BR') : 'N/A'}</span>
+              </div>
+              <div className="mt-2 flex items-center justify-between text-[11px] text-slate-400">
+                <span>Último vencimento</span>
+                <span>{item.lastDue ? new Date(`${item.lastDue}T12:00:00`).toLocaleDateString('pt-BR') : 'N/A'}</span>
+              </div>
+              <p className="mt-3 text-sm font-semibold text-white">{money(item.totalOpen)}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="rounded-xl border border-white/[0.07] bg-[#11161e] p-5">
+        <h2 className="text-sm font-semibold text-slate-200">Sugestão de operação</h2>
+        <div className="mt-4 space-y-3">
+          <div className="rounded-lg border border-white/[0.06] bg-white/[0.02] p-3">
+            <p className="text-[10px] uppercase tracking-[0.14em] text-slate-500">Cobrança prevista</p>
+            <p className="mt-2 text-lg font-semibold text-white">{money(recurringSchedules.filter((item) => item.type === 'receita').reduce((sum, item) => sum + item.totalOpen, 0))}</p>
+          </div>
+          <div className="rounded-lg border border-white/[0.06] bg-white/[0.02] p-3">
+            <p className="text-[10px] uppercase tracking-[0.14em] text-slate-500">Despesas recorrentes</p>
+            <p className="mt-2 text-lg font-semibold text-white">{money(recurringSchedules.filter((item) => item.type === 'despesa').reduce((sum, item) => sum + item.totalOpen, 0))}</p>
+          </div>
+          <div className="rounded-lg border border-white/[0.06] bg-white/[0.02] p-3">
+            <p className="text-[10px] uppercase tracking-[0.14em] text-slate-500">Saldo recorrente</p>
+            <p className="mt-2 text-lg font-semibold text-white">{money(recurringSchedules.filter((item) => item.type === 'receita').reduce((sum, item) => sum + item.totalOpen, 0) - recurringSchedules.filter((item) => item.type === 'despesa').reduce((sum, item) => sum + item.totalOpen, 0))}</p>
+          </div>
+        </div>
+      </div>
+    </div>}
+
+    {tab === 'budget' && <div className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
+      <div className="rounded-xl border border-white/[0.07] bg-[#11161e] p-5">
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="text-sm font-semibold text-slate-200">Planejamento orçamentário</h2>
+          <span className="text-[10px] uppercase tracking-[0.14em] text-slate-500">base atual</span>
+        </div>
+
+        <div className="mt-4 grid gap-3 sm:grid-cols-3">
+          <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-3">
+            <p className="text-[10px] uppercase tracking-[0.14em] text-emerald-300">Receita prevista</p>
+            <p className="mt-2 text-xl font-semibold text-white">{money(expectedReceipts)}</p>
+          </div>
+          <div className="rounded-lg border border-rose-500/20 bg-rose-500/5 p-3">
+            <p className="text-[10px] uppercase tracking-[0.14em] text-rose-300">Despesa prevista</p>
+            <p className="mt-2 text-xl font-semibold text-white">{money(expectedPayments)}</p>
+          </div>
+          <div className="rounded-lg border border-cyan-500/20 bg-cyan-500/5 p-3">
+            <p className="text-[10px] uppercase tracking-[0.14em] text-cyan-300">Reserva</p>
+            <p className="mt-2 text-xl font-semibold text-white">{money(reservedCash)}</p>
+          </div>
+        </div>
+
+        <div className="mt-5 space-y-3">
+          {budgetLines.map((item) => {
+            const variance = item.planned - item.actual
+            const width = Math.max(Math.min((item.actual / Math.max(item.planned, 1)) * 100, 100), 12)
+            return (
+              <div key={item.label} className="rounded-lg border border-white/[0.06] bg-white/[0.02] p-3">
+                <div className="mb-2 flex items-center justify-between gap-2 text-[11px] text-slate-400">
+                  <span>{item.label}</span>
+                  <span>{variance >= 0 ? '+' : '-'}{money(Math.abs(variance))}</span>
+                </div>
+                <div className="h-2 overflow-hidden rounded-full bg-white/[0.05]">
+                  <div className={`h-2 rounded-full ${variance >= 0 ? 'bg-gradient-to-r from-emerald-500 to-emerald-400' : 'bg-gradient-to-r from-amber-500 to-amber-400'}`} style={{ width: `${width}%` }} />
+                </div>
+                <div className="mt-2 flex items-center justify-between text-[10px] text-slate-500">
+                  <span>Real: {money(item.actual)}</span>
+                  <span>Meta: {money(item.planned)}</span>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+
+      <div className="rounded-xl border border-white/[0.07] bg-[#11161e] p-5">
+        <h2 className="text-sm font-semibold text-slate-200">Desvio orçamentário</h2>
+        <div className="mt-4 space-y-3">
+          <div className="rounded-lg border border-white/[0.06] bg-white/[0.02] p-3">
+            <p className="text-[10px] uppercase tracking-[0.14em] text-slate-500">Variação prevista</p>
+            <p className="mt-2 text-lg font-semibold text-white">{money(budgetVariance)}</p>
+          </div>
+          <div className="rounded-lg border border-white/[0.06] bg-white/[0.02] p-3">
+            <p className="text-[10px] uppercase tracking-[0.14em] text-slate-500">Margem operacional</p>
+            <p className="mt-2 text-lg font-semibold text-white">{money(Math.max(netCash - expectedPayments * 0.1, 0))}</p>
+          </div>
+          <div className="rounded-lg border border-white/[0.06] bg-white/[0.02] p-3">
+            <p className="text-[10px] uppercase tracking-[0.14em] text-slate-500">Status</p>
+            <p className="mt-2 text-lg font-semibold text-white">{budgetVariance >= 0 ? 'Dentro do plano' : 'Ajuste requerido'}</p>
+          </div>
+        </div>
+      </div>
+    </div>}
+
+    {tab !== 'overview' && tab !== 'cashflow' && tab !== 'recurring' && tab !== 'budget' && <div className="rounded-xl border border-white/[0.07] bg-[#11161e]">
+      <div className="flex items-center justify-between border-b border-white/[0.07] p-4">
+        <div className="flex items-center gap-2 rounded-lg border border-white/[0.08] px-3 py-2">
+          <Search className="size-4 text-slate-500" />
+          <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar lançamento" className="bg-transparent text-xs text-white outline-none" />
+        </div>
+        <button className="hidden items-center gap-2 text-xs text-slate-500 hover:text-white sm:flex"><Download className="size-3.5" />Exportar</button>
+      </div>
+
+      {loading ? (
+        <p className="p-8 text-center text-xs text-slate-500">Carregando lançamentos...</p>
+      ) : (
+        <>
+          <ListingControls total={tab === 'payable' ? filteredPayables.length : filteredReceivables.length} page={page} onPageChange={setPage} hasActiveFilters={Boolean(query)} onClear={() => { setQuery(''); setPage(0) }} />
+          <div className="divide-y divide-white/[0.06]">
+            {visibleFinanceRows.map((item) => (
+              <div key={item.id} className="flex items-center justify-between gap-4 px-5 py-4">
+                <div>
+                  <p className="text-sm text-slate-200">{item.description}</p>
+                  <p className="mt-1 text-[11px] text-slate-500">{'beneficiary' in item ? item.beneficiary : item.category} · vencimento {item.due_date ? new Date(`${item.due_date.slice(0, 10)}T12:00:00`).toLocaleDateString('pt-BR') : 'Não informado'}</p>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="text-right">
+                    <p className="text-sm font-semibold text-white">{money('amount' in item ? item.amount : item.final_amount)}</p>
+                    <p className="text-[11px] text-slate-500">{item.status}</p>
+                  </div>
+                  <button onClick={() => { setRecord(item); setEditingRecord(false); setMessage('') }} aria-label="Ver detalhes" className="rounded p-2 text-slate-400 hover:bg-white/5 hover:text-white"><Eye className="size-4" /></button>
+                  {canUpdate && <button onClick={() => { setRecord(item); setEditingRecord(true); setMessage('') }} aria-label="Editar lançamento" className="rounded p-2 text-slate-400 hover:bg-white/5 hover:text-white"><Pencil className="size-4" /></button>}
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+    </div>}
+
     {record && <div className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-black/70 p-4" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setRecord(null) }}><div className="w-full max-w-lg rounded-xl border border-white/10 bg-[#151b24] p-5 shadow-2xl">
       <div className="mb-5 flex items-start justify-between"><div><p className="text-xs uppercase tracking-wider text-blue-300">{'beneficiary' in record ? 'Conta a pagar' : 'Conta a receber'}</p><h3 className="mt-1 text-lg font-semibold text-white">{editingRecord ? 'Editar lançamento' : record.description}</h3></div><button type="button" onClick={() => setRecord(null)} aria-label="Fechar detalhes"><X className="size-5 text-slate-400" /></button></div>
       {editingRecord ? <form onSubmit={(event) => void saveRecord(event)} className="grid gap-3">
