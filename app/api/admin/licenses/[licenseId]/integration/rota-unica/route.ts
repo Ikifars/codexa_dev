@@ -1,7 +1,7 @@
 import JSZip from 'jszip'
 import { NextResponse } from 'next/server'
 import { requireWorkspacePermission, AdminApiError } from '@/lib/supabase/admin-server'
-import { generatePageWrapper, generateRotaUnicaIntegration, type IntegrationModule, type TabMapping } from '@/lib/licensing/rota-unica-generator'
+import { analyzeAdminClient, generatePageWrapper, generateRotaUnicaIntegration, type IntegrationModule, type TabMapping } from '@/lib/licensing/rota-unica-generator'
 
 function errorResponse(error: unknown) {
   if (error instanceof AdminApiError) return NextResponse.json({ error: error.message }, { status: error.status })
@@ -33,6 +33,8 @@ export async function POST(request: Request, context: { params: Promise<{ licens
     const { data: modules, error: modulesError } = await supabase.from('system_modules').select('internal_code,name').eq('system_id', license.system_id).order('internal_code')
     if (modulesError) throw modulesError
     const integrationModules: IntegrationModule[] = (modules ?? []).map((module) => ({ code: module.internal_code, name: module.name }))
+    const analysis = analyzeAdminClient(originalCode, integrationModules)
+    if (form.get('analyze') === 'true') return NextResponse.json({ analysis })
     const generated = generateRotaUnicaIntegration(originalCode, integrationModules, mapping)
     const apiUrl = `${process.env.NEXT_PUBLIC_APP_URL ?? ''}/api/licenses/validate`
     const zip = new JSZip()
