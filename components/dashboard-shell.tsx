@@ -16,6 +16,7 @@ import { AccountWorkspace } from '@/components/account-workspace'
 import { GamifiedProfileWorkspace } from '@/components/gamified-profile-workspace'
 import { AuthScreen } from '@/components/auth-screen'
 import { XpSettingsWorkspace } from '@/components/xp-settings-workspace'
+import { UserAvatar } from '@/components/user-avatar'
 import { createClient } from '@/lib/supabase/client'
 import { hasWorkspaceAccess } from '@/lib/workspace-access'
 import { applyWorkspaceTheme, getWorkspaceThemePreference } from '@/lib/workspace-theme'
@@ -149,13 +150,28 @@ function DashboardContent({ initialSection = 'Dashboard', page, permissions, pro
   const [notificationsError, setNotificationsError] = useState('')
   const [actionableNotificationIds, setActionableNotificationIds] = useState<string[]>([])
   const [dashboardData, setDashboardData] = useState<DashboardData>({ team: 0, clients: 0, projects: 0, tickets: 0, contracts: 0, messages: 0, ranking: [] })
+  const [profileAvatarUrl, setProfileAvatarUrl] = useState('')
+  const [profileNickname, setProfileNickname] = useState('')
   const searchInput = useRef<HTMLInputElement>(null)
   const displayName = profileName.trim() || 'Usuário'
-  const initials = displayName.split(/\s+/).slice(0, 2).map((part) => part[0]).join('').toUpperCase()
+  const avatarUser = { fullName: displayName, nickname: profileNickname, avatarUrl: profileAvatarUrl }
 
   useEffect(() => {
     setActiveSection(initialSection)
   }, [initialSection, pathname])
+
+  useEffect(() => {
+    let active = true
+    void fetch('/api/workspace/profile', { cache: 'no-store' }).then(async (response) => {
+      if (!response.ok || !active) return
+      const data = await response.json() as { avatarUrl?: string; nickname?: string }
+      if (active) {
+        setProfileAvatarUrl(data.avatarUrl ?? '')
+        setProfileNickname(data.nickname ?? '')
+      }
+    }).catch(() => undefined)
+    return () => { active = false }
+  }, [])
 
   useEffect(() => {
     const applySavedTheme = () => applyWorkspaceTheme(getWorkspaceThemePreference())
@@ -326,7 +342,7 @@ function DashboardContent({ initialSection = 'Dashboard', page, permissions, pro
             </div>
           )})}
         </nav>
-        {!collapsed && <button onClick={() => openSection('Meu perfil')} className="border-t border-white/[0.07] p-3 text-left"><span className="flex items-center gap-3 rounded-lg p-2"><span className="grid size-8 shrink-0 place-items-center rounded-full bg-slate-700 text-xs font-semibold text-slate-200">{initials}</span><span className="min-w-0 flex-1"><span className="block truncate text-xs font-medium text-slate-200">{displayName}</span><span className="block truncate text-[11px] text-slate-500">Meu perfil</span></span></span></button>}
+        {!collapsed && <button onClick={() => openSection('Meu perfil')} className="border-t border-white/[0.07] p-3 text-left"><span className="flex items-center gap-3 rounded-lg p-2"><UserAvatar user={avatarUser} size="sm" /><span className="min-w-0 flex-1"><span className="block truncate text-xs font-medium text-slate-200">{displayName}</span><span className="block truncate text-[11px] text-slate-500">Meu perfil</span></span></span></button>}
       </aside>
       {mobileOpen && <button className="fixed inset-0 z-30 bg-black/60 lg:hidden" onClick={() => setMobileOpen(false)} aria-label="Fechar menu" />}
       <div className={`transition-[margin] duration-200 ${collapsed ? 'lg:ml-[78px]' : 'lg:ml-[258px]'}`}>
@@ -355,7 +371,7 @@ function DashboardContent({ initialSection = 'Dashboard', page, permissions, pro
             </div>
             <div className="mx-1 h-5 w-px bg-white/10" />
             <button onClick={() => openSection('Meu perfil')} className="flex items-center gap-2 rounded-lg p-1.5 pr-2 hover:bg-white/5" aria-label={`Perfil de ${displayName}`}>
-              <span className="grid size-7 place-items-center rounded-full bg-blue-500/20 text-[10px] font-bold text-blue-300">{initials}</span>
+              <UserAvatar user={avatarUser} size="sm" />
               <span className="hidden max-w-32 truncate text-xs text-slate-300 sm:block">{displayName}</span>
               <ChevronDown className="size-3.5 text-slate-500" />
             </button>

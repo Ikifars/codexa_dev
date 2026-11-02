@@ -6,25 +6,53 @@ import * as t from '@babel/types'
 export type IntegrationModule = { code: string; name: string }
 export type TabMapping = { code: string; tab: string }
 
+export type DetectedTab = { tab: string; code: string; confidence: number; hasContent: boolean; hasTrigger: boolean }
+
 export type RotaUnicaAnalysis = {
   stateName: string
   tabs: string[]
+  detectedTabs: DetectedTab[]
   mappings: TabMapping[]
+  sharedComponents: string[]
   warnings: string[]
+  uncertain: string[]
   requiresConfirmation: boolean
 }
 
 function unique(values: string[]) { return [...new Set(values)] }
 
+const adminClientParserOptions = {
+  sourceType: 'module' as const,
+  plugins: ['typescript', 'jsx', 'decorators-legacy', 'classProperties', 'objectRestSpread', 'optionalChaining', 'nullishCoalescingOperator', 'dynamicImport', 'topLevelAwait'],
+}
+
+function stringLiteralsFromType(type: t.TSType | null | undefined): string[] {
+  if (!type) return []
+  if (t.isTSUnionType(type)) return type.types.flatMap((item) => stringLiteralsFromType(item))
+  if (t.isTSLiteralType(type) && t.isStringLiteral(type.literal)) return [type.literal.value]
+  return []
+}
+
 export function analyzeAdminClient(source: string, modules: IntegrationModule[]): RotaUnicaAnalysis {
   let ast: t.File
   try {
-    ast = parse(source, { sourceType: 'module', plugins: ['typescript', 'jsx'] })
+    ast = parse(source, adminClientParserOptions as never)
   } catch (error) {
     throw new Error(`AdminClient.tsx inválido: ${error instanceof Error ? error.message : 'não foi possível analisar o TSX.'}`)
   }
   let stateName = ''
   const tabs: string[] = []
+  const namedTypes = new Map<string, string[]>()
+  traverse(ast, {
+    TSTypeAliasDeclaration(path) {
+      const values = stringLiteralsFromType(path.node.typeAnnotation)
+      if (values.length) namedTypes.set(path.node.id.name, values)
+    },
+    TSInterfaceDeclaration(path) {
+      const values = path.node.body.body.flatMap((member) => t.isTSPropertySignature(member) ? stringLiteralsFromType(member.typeAnnotation?.typeAnnotation) : [])
+      if (values.length) namedTypes.set(path.node.id.name, values)
+    },
+  })
   traverse(ast, {
     CallExpression(path) {
       if (!t.isIdentifier(path.node.callee, { name: 'useState' })) return
@@ -35,20 +63,43 @@ export function analyzeAdminClient(source: string, modules: IntegrationModule[])
       const [state] = parent.node.id.elements
       if (!t.isIdentifier(state)) return
       const annotation = t.isPattern(parent.node.id) ? parent.node.id.typeAnnotation : null
-      const typeText = annotation ? generate(annotation).code : ''
-      const values = [...typeText.matchAll(/[\'"]([^\'"]+)[\'"]/g)].map((match) => match[1])
+      const annotationType = annotation?.typeAnnotation
+      const namedValues = t.isTSTypeReference(annotationType) && t.isIdentifier(annotationType.typeName)
+        ? namedTypes.get(annotationType.typeName.name) ?? []
+        : []
+      const values = annotationType && t.isTSType(annotationType) ? stringLiteralsFromType(annotationType) : []
       const initializerValues = t.isArrayExpression(argument)
         ? argument.elements.flatMap((element) => t.isStringLiteral(element) ? [element.value] : [])
         : []
-      const detectedValues = unique([...values, ...initializerValues])
+      const detectedValues = unique([...values, ...namedValues, ...initializerValues])
       if (detectedValues.length > 0 && !stateName) { stateName = state.name; tabs.push(...detectedValues) }
     },
   })
-  if (!stateName || tabs.length < 2) throw new Error('Não foi possível detectar uma navegação de abas segura. Informe uma página que use useState com união literal de abas, ou configure o mapeamento manualmente.')
-  const normalizedTabs = unique(tabs)
-  const mappings: TabMapping[] = []
-  const warnings = ['A associação entre áreas e códigos de módulo precisa ser confirmada explicitamente antes da instalação.']
-  return { stateName, tabs: normalizedTabs, mappings, warnings, requiresConfirmation: true }
+  const routeCandidates = unique([...source.matchAll(/(?:href|to|push|replace)\s*[=(]\s*[`'\"]([^`'\"]+)[`'\"]/g)].map((match) => match[1]).filter((value) => value.startsWith('/')))
+  const componentCandidates = unique([...source.matchAll(/(?:component|element)\s*=\s*\{?([A-Z][A-Za-z0-9_]*)/g)].map((match) => match[1]))
+  const normalizedTabs = unique([...tabs, ...routeCandidates, ...componentCandidates])
+  const sourceText = generate(ast).code
+  const sharedComponents = unique([...sourceText.matchAll(/<([A-Z][A-Za-z0-9_]*)/g)].map((match) => match[1]).filter((name) => !['AdminClient', 'Fragment'].includes(name)))
+  const detectedTabs: DetectedTab[] = normalizedTabs.map((tab) => {
+    const escaped = tab.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    const tabPattern = new RegExp(escaped, 'g')
+    const occurrences = source.match(tabPattern)?.length ?? 0
+    const hasTrigger = new RegExp(`set[A-Z][A-Za-z0-9_]*\\s*\\(\\s*['\"]${escaped}['\"]`).test(source)
+    const hasContent = occurrences > 1 || new RegExp(`['\"]${escaped}['\"]\\s*===|===\\s*['\"]${escaped}['\"]`).test(source)
+    const candidates = modules.filter((module) => {
+      const codeEvidence = new RegExp(`(?:['\"]${module.code}['\"]|\\b${module.code}\\b)`).test(source)
+      const nameEvidence = module.name.split(/\s+/).filter((word) => word.length > 3).some((word) => new RegExp(word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i').test(source))
+      return codeEvidence || nameEvidence
+    })
+    const candidate = candidates.length === 1 ? candidates[0].code : ''
+    return { tab, code: candidate, confidence: candidate ? (source.includes(candidate) ? 0.95 : 0.72) : 0, hasContent, hasTrigger }
+  })
+  const mappings = detectedTabs.filter((item) => item.code && item.confidence >= 0.9).map(({ tab, code }) => ({ tab, code }))
+  const uncertain = detectedTabs.filter((item) => !item.code || item.confidence < 0.9).map((item) => item.tab)
+  const warnings = ['As associações são baseadas somente em evidências encontradas no código e exigem confirmação antes da instalação.']
+  if (!normalizedTabs.length) warnings.push('Nenhuma navegação por abas ou rota foi identificada; a análise estrutural continua disponível e o mapeamento pode ser informado manualmente.')
+  if (uncertain.length) warnings.push(`${uncertain.length} área(s) não possuem evidência suficiente para associação automática.`)
+  return { stateName, tabs: normalizedTabs, detectedTabs, mappings, sharedComponents, warnings, uncertain, requiresConfirmation: true }
 }
 
 function addAllowedProp(ast: t.File) {
@@ -84,9 +135,9 @@ export function generateRotaUnicaIntegration(originalCode: string, modules: Inte
   if (selected.some((item) => tabsSeen.has(item.tab) || !tabsSeen.add(item.tab))) throw new Error('Cada aba detectada só pode ser mapeada uma vez.')
   const validTabs = new Set(analysis.tabs)
   const validCodes = new Set(modules.map((module) => module.code))
-  if (selected.some((item) => !validTabs.has(item.tab) || !validCodes.has(item.code))) throw new Error('O mapeamento contém uma aba ou código de módulo inexistente.')
-  if (analysis.tabs.some((tab) => !selected.some((item) => item.tab === tab))) throw new Error('Mapeie todas as abas detectadas antes de gerar o pacote.')
-  const ast = parse(originalCode, { sourceType: 'module', plugins: ['typescript', 'jsx'] })
+  if (selected.some((item) => (validTabs.size > 0 && !validTabs.has(item.tab)) || !validCodes.has(item.code))) throw new Error('O mapeamento contém uma aba, rota ou código de módulo inexistente.')
+  if (analysis.tabs.length > 0 && analysis.tabs.some((tab) => !selected.some((item) => item.tab === tab))) throw new Error('Mapeie todas as áreas detectadas antes de gerar o pacote.')
+  const ast = parse(originalCode, adminClientParserOptions as never)
   if (!addAllowedProp(ast)) throw new Error('A página foi analisada, mas não encontrei um componente AdminClient modificável.')
   const generated = generate(ast, { retainLines: false, jsescOption: { minimal: true } }).code
   const guard = `\n\nexport type CodexaAllowedModules = Record<string, boolean>\n\nexport function codexaCanUseModule(allowedModules: CodexaAllowedModules, code: string) {\n  return allowedModules[code] === true\n}\n\nexport const CODEXA_TAB_MAPPING = ${JSON.stringify(selected, null, 2)} as const\n`

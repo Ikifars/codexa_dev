@@ -71,6 +71,7 @@ export function XpSettingsWorkspace() {
   const [activeTab, setActiveTab] = useState<"levels" | "rules" | "ledger">(
     "levels",
   );
+  const [levelsExpanded, setLevelsExpanded] = useState(false);
   const [editingLevel, setEditingLevel] = useState<Level | null>(null);
   const [showLevelForm, setShowLevelForm] = useState(false);
   const [levelForm, setLevelForm] = useState(emptyLevel);
@@ -267,21 +268,20 @@ export function XpSettingsWorkspace() {
           </button>
         ))}
       </nav>
-      <section
+      <details
+        open={activeTab === "levels" && levelsExpanded}
         hidden={activeTab !== "levels"}
+        onToggle={(event) => setLevelsExpanded(event.currentTarget.open)}
         className="rounded-2xl border border-white/[0.07] bg-[#11161e] p-5 sm:p-6"
       >
-        <div className="flex items-center justify-between gap-3">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-blue-400">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
-              Progressão
-            </p>
-            <h2 className="mt-1 text-lg font-semibold text-white">
-              Níveis e marcos de XP
-            </h2>
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Progressão</p>
+            <h2 className="mt-1 text-lg font-semibold text-white">Níveis e marcos de XP</h2>
+            <p className="mt-1 text-xs text-slate-500">{levels.length} {levels.length === 1 ? "nível cadastrado" : "níveis cadastrados"} · {levels.filter((level) => level.is_active).length} ativos</p>
           </div>
-          <Layers3 className="size-5 text-slate-500" />
-        </div>
+          <ChevronDown className="size-5 text-slate-500 transition-transform group-open:rotate-180" aria-hidden="true" />
+        </summary>
         <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           {levels.map((level) => (
             <div
@@ -441,7 +441,7 @@ export function XpSettingsWorkspace() {
             </button>
           </div>
         )}
-      </section>
+      </details>
       <section
         hidden={activeTab !== "rules"}
         className="rounded-2xl border border-white/[0.07] bg-[#11161e] p-5 sm:p-6"
