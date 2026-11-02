@@ -21,15 +21,38 @@ export type RotaUnicaAnalysis = {
 
 function unique(values: string[]) { return [...new Set(values)] }
 
+const adminClientParserOptions = {
+  sourceType: 'module' as const,
+  plugins: ['typescript', 'jsx', 'decorators-legacy', 'classProperties', 'objectRestSpread', 'optionalChaining', 'nullishCoalescingOperator', 'dynamicImport', 'topLevelAwait'],
+}
+
+function stringLiteralsFromType(type: t.TSType | null | undefined): string[] {
+  if (!type) return []
+  if (t.isTSUnionType(type)) return type.types.flatMap((item) => stringLiteralsFromType(item))
+  if (t.isTSLiteralType(type) && t.isStringLiteral(type.literal)) return [type.literal.value]
+  return []
+}
+
 export function analyzeAdminClient(source: string, modules: IntegrationModule[]): RotaUnicaAnalysis {
   let ast: t.File
   try {
-    ast = parse(source, { sourceType: 'module', plugins: ['typescript', 'jsx'] })
+    ast = parse(source, adminClientParserOptions as never)
   } catch (error) {
     throw new Error(`AdminClient.tsx inválido: ${error instanceof Error ? error.message : 'não foi possível analisar o TSX.'}`)
   }
   let stateName = ''
   const tabs: string[] = []
+  const namedTypes = new Map<string, string[]>()
+  traverse(ast, {
+    TSTypeAliasDeclaration(path) {
+      const values = stringLiteralsFromType(path.node.typeAnnotation)
+      if (values.length) namedTypes.set(path.node.id.name, values)
+    },
+    TSInterfaceDeclaration(path) {
+      const values = path.node.body.body.flatMap((member) => t.isTSPropertySignature(member) ? stringLiteralsFromType(member.typeAnnotation?.typeAnnotation) : [])
+      if (values.length) namedTypes.set(path.node.id.name, values)
+    },
+  })
   traverse(ast, {
     CallExpression(path) {
       if (!t.isIdentifier(path.node.callee, { name: 'useState' })) return
@@ -40,12 +63,15 @@ export function analyzeAdminClient(source: string, modules: IntegrationModule[])
       const [state] = parent.node.id.elements
       if (!t.isIdentifier(state)) return
       const annotation = t.isPattern(parent.node.id) ? parent.node.id.typeAnnotation : null
-      const typeText = annotation ? generate(annotation).code : ''
-      const values = [...typeText.matchAll(/[\'"]([^\'"]+)[\'"]/g)].map((match) => match[1])
+      const annotationType = annotation?.typeAnnotation
+      const namedValues = t.isTSTypeReference(annotationType) && t.isIdentifier(annotationType.typeName)
+        ? namedTypes.get(annotationType.typeName.name) ?? []
+        : []
+      const values = annotationType && t.isTSType(annotationType) ? stringLiteralsFromType(annotationType) : []
       const initializerValues = t.isArrayExpression(argument)
         ? argument.elements.flatMap((element) => t.isStringLiteral(element) ? [element.value] : [])
         : []
-      const detectedValues = unique([...values, ...initializerValues])
+      const detectedValues = unique([...values, ...namedValues, ...initializerValues])
       if (detectedValues.length > 0 && !stateName) { stateName = state.name; tabs.push(...detectedValues) }
     },
   })
@@ -109,7 +135,7 @@ export function generateRotaUnicaIntegration(originalCode: string, modules: Inte
   const validCodes = new Set(modules.map((module) => module.code))
   if (selected.some((item) => !validTabs.has(item.tab) || !validCodes.has(item.code))) throw new Error('O mapeamento contém uma aba ou código de módulo inexistente.')
   if (analysis.tabs.some((tab) => !selected.some((item) => item.tab === tab))) throw new Error('Mapeie todas as abas detectadas antes de gerar o pacote.')
-  const ast = parse(originalCode, { sourceType: 'module', plugins: ['typescript', 'jsx'] })
+  const ast = parse(originalCode, adminClientParserOptions as never)
   if (!addAllowedProp(ast)) throw new Error('A página foi analisada, mas não encontrei um componente AdminClient modificável.')
   const generated = generate(ast, { retainLines: false, jsescOption: { minimal: true } }).code
   const guard = `\n\nexport type CodexaAllowedModules = Record<string, boolean>\n\nexport function codexaCanUseModule(allowedModules: CodexaAllowedModules, code: string) {\n  return allowedModules[code] === true\n}\n\nexport const CODEXA_TAB_MAPPING = ${JSON.stringify(selected, null, 2)} as const\n`
