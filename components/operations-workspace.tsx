@@ -28,7 +28,7 @@ type Ticket = {
   first_response_at?: string | null
   closed_at?: string | null
 }
-type Member = { id: string; full_name: string; role_name: string; status?: string | null }
+type Member = { id: string; user_id?: string | null; full_name: string; role_name: string; status?: string | null }
 type OperationalRecord = ChangeRequest | Ticket
 
 type SupportMessage = {
@@ -207,7 +207,7 @@ export function OperationsWorkspace({ initialModule = 'projects', permissions }:
 
       if (canAssign) {
         const { data: memberRows, error: membersError } = await supabase.from('team_members')
-          .select('id,full_name,role_name,status')
+          .select('id,user_id,full_name,role_name,status')
           .order('full_name')
         if (membersError) setError((current) => current || `Não foi possível carregar os responsáveis: ${membersError.message}`)
         else setMembers((memberRows ?? []) as Member[])
