@@ -75,8 +75,9 @@ export function analyzeAdminClient(source: string, modules: IntegrationModule[])
       if (detectedValues.length > 0 && !stateName) { stateName = state.name; tabs.push(...detectedValues) }
     },
   })
-  if (!stateName || tabs.length < 2) throw new Error('Não foi possível detectar uma navegação de abas segura. Informe uma página que use useState com união literal de abas, ou configure o mapeamento manualmente.')
-  const normalizedTabs = unique(tabs)
+  const routeCandidates = unique([...source.matchAll(/(?:href|to|push|replace)\s*[=(]\s*[`'\"]([^`'\"]+)[`'\"]/g)].map((match) => match[1]).filter((value) => value.startsWith('/')))
+  const componentCandidates = unique([...source.matchAll(/(?:component|element)\s*=\s*\{?([A-Z][A-Za-z0-9_]*)/g)].map((match) => match[1]))
+  const normalizedTabs = unique([...tabs, ...routeCandidates, ...componentCandidates])
   const sourceText = generate(ast).code
   const sharedComponents = unique([...sourceText.matchAll(/<([A-Z][A-Za-z0-9_]*)/g)].map((match) => match[1]).filter((name) => !['AdminClient', 'Fragment'].includes(name)))
   const detectedTabs: DetectedTab[] = normalizedTabs.map((tab) => {
@@ -96,6 +97,7 @@ export function analyzeAdminClient(source: string, modules: IntegrationModule[])
   const mappings = detectedTabs.filter((item) => item.code && item.confidence >= 0.9).map(({ tab, code }) => ({ tab, code }))
   const uncertain = detectedTabs.filter((item) => !item.code || item.confidence < 0.9).map((item) => item.tab)
   const warnings = ['As associações são baseadas somente em evidências encontradas no código e exigem confirmação antes da instalação.']
+  if (!normalizedTabs.length) warnings.push('Nenhuma navegação por abas ou rota foi identificada; a análise estrutural continua disponível e o mapeamento pode ser informado manualmente.')
   if (uncertain.length) warnings.push(`${uncertain.length} área(s) não possuem evidência suficiente para associação automática.`)
   return { stateName, tabs: normalizedTabs, detectedTabs, mappings, sharedComponents, warnings, uncertain, requiresConfirmation: true }
 }
@@ -133,8 +135,8 @@ export function generateRotaUnicaIntegration(originalCode: string, modules: Inte
   if (selected.some((item) => tabsSeen.has(item.tab) || !tabsSeen.add(item.tab))) throw new Error('Cada aba detectada só pode ser mapeada uma vez.')
   const validTabs = new Set(analysis.tabs)
   const validCodes = new Set(modules.map((module) => module.code))
-  if (selected.some((item) => !validTabs.has(item.tab) || !validCodes.has(item.code))) throw new Error('O mapeamento contém uma aba ou código de módulo inexistente.')
-  if (analysis.tabs.some((tab) => !selected.some((item) => item.tab === tab))) throw new Error('Mapeie todas as abas detectadas antes de gerar o pacote.')
+  if (selected.some((item) => (validTabs.size > 0 && !validTabs.has(item.tab)) || !validCodes.has(item.code))) throw new Error('O mapeamento contém uma aba, rota ou código de módulo inexistente.')
+  if (analysis.tabs.length > 0 && analysis.tabs.some((tab) => !selected.some((item) => item.tab === tab))) throw new Error('Mapeie todas as áreas detectadas antes de gerar o pacote.')
   const ast = parse(originalCode, adminClientParserOptions as never)
   if (!addAllowedProp(ast)) throw new Error('A página foi analisada, mas não encontrei um componente AdminClient modificável.')
   const generated = generate(ast, { retainLines: false, jsescOption: { minimal: true } }).code

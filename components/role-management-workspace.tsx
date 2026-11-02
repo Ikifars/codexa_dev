@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useMemo, useState } from 'react'
 import { Eye, Loader2, Pencil, Plus, Save, Search, Shield, Trash2, Users, X } from 'lucide-react'
+import { UserAvatar } from '@/components/user-avatar'
 
 type Permission = { id: string; module_name: string; action_name: string }
 type Role = {
@@ -18,6 +19,9 @@ type Member = {
   user_id: string | null
   full_name: string
   email: string
+  job_title?: string | null
+  department?: string | null
+  joined_on?: string | null
   role_name: string
   status: string
   created_at: string
@@ -152,6 +156,11 @@ export function RoleManagementWorkspace({ initialView = 'roles' }: { initialView
   }, [initialView])
 
   const role = roles.find((item) => item.id === selectedRole)
+  const filteredMembers = useMemo(() => {
+    const term = search.trim().toLowerCase()
+    if (!term) return members
+    return members.filter((member) => [member.full_name, member.email, member.job_title, member.department, member.role_name].filter(Boolean).join(' ').toLowerCase().includes(term))
+  }, [members, search])
   useEffect(() => {
     if (!role) return
     setRoleName(role.name)
@@ -440,6 +449,11 @@ export function RoleManagementWorkspace({ initialView = 'roles' }: { initialView
           </> : <p className="p-8 text-sm text-slate-500">Selecione um cargo para consultar sua matriz.</p>}
         </form>
       </div> : <div className="space-y-4">
+        <label className="flex items-center gap-2 rounded-xl border border-white/[0.07] bg-[#11161e] px-3 py-2.5">
+          <Search className="size-4 text-slate-500" aria-hidden="true" />
+          <span className="sr-only">Pesquisar usuários</span>
+          <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Pesquisar por apelido, nome, cargo ou setor" className="w-full bg-transparent text-sm text-slate-200 outline-none placeholder:text-slate-600" />
+        </label>
         {inviteOpen && <form onSubmit={(event) => void inviteMember(event)} className="grid gap-3 rounded-xl border border-white/[0.07] bg-[#11161e] p-5 sm:grid-cols-2 xl:grid-cols-5">
           <label className="text-xs text-slate-500">Nome<input name="fullName" required minLength={2} maxLength={200} className={inputClass} /></label>
           <label className="text-xs text-slate-500">E-mail<input name="email" type="email" required className={inputClass} /></label>
@@ -456,10 +470,10 @@ export function RoleManagementWorkspace({ initialView = 'roles' }: { initialView
         <div className="overflow-x-auto rounded-xl border border-white/[0.07] bg-[#11161e]">
           <table className="w-full min-w-[820px] text-left text-sm">
             <thead className="border-b border-white/[0.07] text-[11px] uppercase tracking-wide text-slate-500"><tr><th className="px-4 py-3">Membro</th><th className="px-4 py-3">Cargo</th><th className="px-4 py-3">Status</th><th className="px-4 py-3">Criado em</th><th className="px-4 py-3">Ações</th></tr></thead>
-            <tbody className="divide-y divide-white/[0.04]">{members.map((member) => {
+            <tbody className="divide-y divide-white/[0.04]">{filteredMembers.map((member) => {
               const self = member.user_id === currentUserId
               return <tr key={member.id}>
-                <td className="px-4 py-3"><p className="text-xs font-medium text-slate-200">{member.full_name}{self ? ' (você)' : ''}</p><p className="mt-1 text-[11px] text-slate-500">{member.email}</p></td>
+                <td className="px-4 py-3"><button type="button" onClick={() => { setMemberDetails(member); setExpandedMember(member.id); void loadMemberOverrides(member.id) }} className="flex items-center gap-3 text-left"><UserAvatar user={{ fullName: member.full_name }} size="sm" /><span><span className="block text-xs font-medium text-slate-200">{member.full_name}{self ? ' (você)' : ''}</span><span className="mt-1 block text-[11px] text-slate-500">{member.email}</span></span></button></td>
                 <td className="px-4 py-3"><select aria-label={`Cargo de ${member.full_name}`} disabled={self} value={member.role_name} onChange={(event) => void updateMember(member, { roleName: event.target.value })} className="rounded-lg border border-white/[0.08] bg-[#0d1118] px-2 py-2 text-xs text-slate-200 disabled:opacity-50">{roles.filter((item) => item.is_active).map((item) => <option key={item.id} value={item.name}>{item.name}</option>)}</select></td>
                 <td className="px-4 py-3"><select aria-label={`Status de ${member.full_name}`} disabled={self} value={member.status.replace(/[\'"]/g, '').trim().toLowerCase() === 'ativo' || member.status.toLowerCase() === 'active' ? 'Ativo' : 'Inativo'} onChange={(event) => void updateMember(member, { status: event.target.value })} className="rounded-lg border border-white/[0.08] bg-[#0d1118] px-2 py-2 text-xs text-slate-200 disabled:opacity-50"><option value="Ativo">Ativo</option><option value="Inativo">Inativo</option></select></td>
                 <td className="px-4 py-3 text-xs text-slate-500">{new Date(member.created_at).toLocaleDateString('pt-BR')}</td>
@@ -476,7 +490,9 @@ export function RoleManagementWorkspace({ initialView = 'roles' }: { initialView
           <div className="flex items-start justify-between gap-4"><div><p className="text-xs uppercase tracking-wider text-blue-300">Usuário</p><h2 id="member-details-title" className="mt-1 text-lg font-semibold text-white">{memberDetails.full_name}</h2></div><button type="button" onClick={() => setMemberDetails(null)} aria-label="Fechar detalhes"><X className="size-5 text-slate-400" /></button></div>
           <dl className="mt-5 grid gap-4 text-sm sm:grid-cols-2">
             <div><dt className="text-xs text-slate-500">E-mail</dt><dd className="mt-1 break-all text-slate-200">{memberDetails.email}</dd></div>
-            <div><dt className="text-xs text-slate-500">Cargo</dt><dd className="mt-1 text-slate-200">{memberDetails.role_name}</dd></div>
+            <div><dt className="text-xs text-slate-500">Cargo</dt><dd className="mt-1 text-slate-200">{memberDetails.job_title || memberDetails.role_name}</dd></div>
+            <div><dt className="text-xs text-slate-500">Setor</dt><dd className="mt-1 text-slate-200">{memberDetails.department || 'Não informado'}</dd></div>
+            <div><dt className="text-xs text-slate-500">Entrada na equipe</dt><dd className="mt-1 text-slate-200">{memberDetails.joined_on ? new Date(memberDetails.joined_on).toLocaleDateString('pt-BR') : 'Não informado'}</dd></div>
             <div><dt className="text-xs text-slate-500">Status</dt><dd className="mt-1 text-slate-200">{memberDetails.status}</dd></div>
             <div><dt className="text-xs text-slate-500">Criado em</dt><dd className="mt-1 text-slate-200">{new Date(memberDetails.created_at).toLocaleDateString('pt-BR')}</dd></div>
           </dl>
