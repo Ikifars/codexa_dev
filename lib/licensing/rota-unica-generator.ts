@@ -46,7 +46,7 @@ function cleanNavigationValue(value: string) {
 
 function navigationCandidates(source: string) {
   const values = [
-    ...[...source.matchAll(/(?:set[A-Z][A-Za-z0-9_]*|onSelect|onChange|navigate|goTo|selectModule|setActive[A-Za-z0-9_]*)\s*\(\s*['"`]([^'"`]+)['"`]/g)].map((match) => match[1]),
+    ...[...source.matchAll(/(?:(?:set(?:Active|Selected|Current|Tab|Section|View|Module|Page|Nav)[A-Za-z0-9_]*)|onSelect|onChange|navigate|goTo|selectModule)\s*\(\s*['"`]([^'"`]+)['"`]/g)].map((match) => match[1]),
     ...[...source.matchAll(/(?:data-(?:tab|module|section)|aria-controls|value|href|to)\s*=\s*['"`]([^'"`]+)['"`]/g)].map((match) => match[1]),
     ...[...source.matchAll(/case\s+['"`]([^'"`]+)['"`]/g)].map((match) => match[1]),
     ...[...source.matchAll(/(?:id|key|slug|value)\s*:\s*['"`]([^'"`]+)['"`]/g)].map((match) => match[1]),

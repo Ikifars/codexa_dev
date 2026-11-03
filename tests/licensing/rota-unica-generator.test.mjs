@@ -49,6 +49,21 @@ test('preserves partial analysis and uses explicit manual mapping for ambiguous 
   assert.ok(generated.analysis.detectedTabs[0].contentEvidence.length >= 1)
 })
 
+test('ignores toast messages and form feedback as navigation candidates', () => {
+  const source = `
+    export default function AdminClient() {
+      const [activeTab, setActiveTab] = useState<'overview' | 'categories' | 'products'>('overview')
+      const [, setMessage] = useState('')
+      function save() { setMessage('Erro ao criar produto:'); setMessage('Produto criado com sucesso!') }
+      return <><button onClick={() => setActiveTab('products')}>Produtos</button><button onClick={() => setActiveTab('categories')}>Categorias</button><button onClick={() => setActiveTab('overview')}>Visão geral</button>{activeTab === 'products' && <Products />}</>
+    }
+  `
+  const result = analyzeAdminClient(source, modules)
+  assert.deepEqual(result.tabs.sort(), ['categories', 'overview', 'products'])
+  assert.equal(result.detectedTabs.some((item) => item.tab.startsWith('Erro ao')), false)
+  assert.equal(result.detectedTabs.some((item) => item.tab.includes('sucesso')), false)
+})
+
 test('preserves existing AdminClient props while adding the licensing prop', () => {
   const source = `export default function AdminClient({ user, theme }: { user: string; theme: string }) { const [active, setActive] = useState('billing'); return <section><button onClick={() => setActive('billing')}>Financeiro</button>{active === 'billing' && <BillingPanel />}</section> }`
   const generated = generateRotaUnicaIntegration(source, modules, [{ tab: 'billing', code: 'billing' }])
