@@ -23,10 +23,11 @@ type Ticket = {
   scheduled_at: string | null
   resolution: string | null
   resolved_at: string | null
+  first_response_at?: string | null
   created_at?: string | null
   updated_at?: string | null
-  first_response_at?: string | null
   closed_at?: string | null
+  archived_at?: string | null
 }
 type Member = { id: string; user_id?: string | null; full_name: string; role_name: string; status?: string | null }
 type OperationalRecord = ChangeRequest | Ticket
@@ -48,7 +49,7 @@ const modules = [
   ['support_tickets', Headphones, 'Suporte'],
 ] as const
 const inputClass = 'w-full rounded-lg border border-white/10 bg-[#151b24] p-3 text-sm text-white'
-const supportStatusOrder = ['Novo', 'Triagem', 'Aberto', 'Em atendimento', 'Aguardando cliente', 'Aguardando equipe interna', 'Agendado', 'Resolvido', 'Fechado', 'Cancelado']
+const supportStatusOrder = ['Novo', 'Triagem', 'Aberto', 'Em atendimento', 'Aguardando cliente', 'Aguardando equipe interna', 'Aguardando terceiro', 'Em desenvolvimento', 'Em validação', 'Agendado', 'Resolvido', 'Fechado', 'Cancelado']
 const supportStatuses = [...supportStatusOrder]
 const supportSectors = ['Suporte Técnico', 'Financeiro', 'Comercial', 'Operações']
 const supportPriorities = ['Baixa', 'Média', 'Alta', 'Crítica']
@@ -200,7 +201,8 @@ export function OperationsWorkspace({ initialModule = 'projects', permissions }:
       else setRequests((data ?? []) as ChangeRequest[])
     } else {
       const { data, error: queryError } = await supabase.from('support_tickets')
-        .select('id,ticket_number,subject,requester,description,status,priority,category,sector,technical_responsible_id,due_at,scheduled_at,resolution,resolved_at,created_at,updated_at')
+        .select('id,ticket_number,subject,requester,description,status,priority,category,sector,technical_responsible_id,due_at,scheduled_at,resolution,resolved_at,first_response_at,created_at,updated_at,archived_at')
+        .is('archived_at', null)
         .order('created_at', { ascending: false })
       if (queryError) setError(`Não foi possível carregar os chamados: ${queryError.message}`)
       else setTickets((data ?? []) as Ticket[])
@@ -245,7 +247,7 @@ export function OperationsWorkspace({ initialModule = 'projects', permissions }:
 
   const supportStats = useMemo(() => {
     const total = tickets.length
-    const open = tickets.filter((ticket) => ['Novo', 'Triagem', 'Aberto', 'Em atendimento', 'Aguardando cliente', 'Aguardando equipe interna', 'Agendado'].includes(normalizeSupportStatus(ticket.status))).length
+    const open = tickets.filter((ticket) => !['Resolvido', 'Fechado', 'Cancelado'].includes(normalizeSupportStatus(ticket.status))).length
     const inProgress = tickets.filter((ticket) => normalizeSupportStatus(ticket.status) === 'Em atendimento').length
     const waitingClient = tickets.filter((ticket) => normalizeSupportStatus(ticket.status) === 'Aguardando cliente').length
     const waitingTeam = tickets.filter((ticket) => normalizeSupportStatus(ticket.status) === 'Aguardando equipe interna').length
@@ -257,6 +259,10 @@ export function OperationsWorkspace({ initialModule = 'projects', permissions }:
       if (['Resolvido', 'Fechado', 'Cancelado'].includes(normalized)) return false
       return new Date(ticket.due_at).getTime() < Date.now()
     }).length
+    const responseTimes = tickets.filter((ticket) => ticket.first_response_at && ticket.created_at).map((ticket) => new Date(ticket.first_response_at!).getTime() - new Date(ticket.created_at!).getTime())
+    const resolutionTimes = tickets.filter((ticket) => ticket.resolved_at && ticket.created_at).map((ticket) => new Date(ticket.resolved_at!).getTime() - new Date(ticket.created_at!).getTime())
+    const averageFirstResponseMinutes = responseTimes.length ? Math.round(responseTimes.reduce((sum, value) => sum + value, 0) / responseTimes.length / 60000) : 0
+    const averageResolutionHours = resolutionTimes.length ? Math.round(resolutionTimes.reduce((sum, value) => sum + value, 0) / resolutionTimes.length / 3600000) : 0
     const dueSoon = tickets.filter((ticket) => {
       if (!ticket.due_at) return false
       const normalized = normalizeSupportStatus(ticket.status)
@@ -285,7 +291,7 @@ export function OperationsWorkspace({ initialModule = 'projects', permissions }:
         return accumulator
       }, {})
     ).sort((a, b) => b[1] - a[1])
-    return { total, open, inProgress, waitingClient, waitingTeam, solved, closed, overdue, dueSoon, sectors, priorities, byResponsible }
+    return { total, open, inProgress, waitingClient, waitingTeam, solved, closed, overdue, dueSoon, averageFirstResponseMinutes, averageResolutionHours, sectors, priorities, byResponsible }
   }, [tickets])
 
   const operationalRows: OperationalRecord[] = module === 'change_requests'
@@ -343,11 +349,15 @@ export function OperationsWorkspace({ initialModule = 'projects', permissions }:
     setError('')
 
     const supabase = createClient()
+    const { data: userData } = await supabase.auth.getUser()
+    const actor = userData.user
+    const actorName = String(actor?.user_metadata?.full_name || actor?.user_metadata?.name || actor?.email || 'Equipe Codexa')
     const { error: insertError } = await supabase.from('support_messages').insert({
       ticket_id: record.id,
       message_type: messageType,
       content: messageDraft.trim(),
-      actor_name: 'Equipe Codexa',
+      actor_name: actorName,
+      created_by: actor?.id ?? null,
     })
 
     if (insertError) {
@@ -362,10 +372,13 @@ export function OperationsWorkspace({ initialModule = 'projects', permissions }:
   }
 
   async function remove(id: string) {
-    if (!canDelete || !window.confirm('Excluir este registro?')) return
+    if (!canDelete || !window.confirm(module === 'support_tickets' ? 'Arquivar este chamado? O histórico será preservado.' : 'Excluir este registro?')) return
     const table = module === 'change_requests' ? 'change_requests' : 'support_tickets'
-    const { error: deleteError } = await createClient().from(table).delete().eq('id', id)
-    if (deleteError) setError(`Não foi possível excluir o registro: ${deleteError.message}`)
+    const mutation = module === 'support_tickets'
+      ? createClient().from(table).update({ archived_at: new Date().toISOString() }).eq('id', id)
+      : createClient().from(table).delete().eq('id', id)
+    const { error: deleteError } = await mutation
+    if (deleteError) setError(`Não foi possível arquivar o registro: ${deleteError.message}`)
     else await loadData()
   }
 
@@ -480,6 +493,8 @@ export function OperationsWorkspace({ initialModule = 'projects', permissions }:
             { label: 'Resolvidos', value: supportStats.solved, tone: 'text-emerald-300', accent: 'bg-emerald-500/10' },
             { label: 'Fechados', value: supportStats.closed, tone: 'text-slate-200', accent: 'bg-slate-500/10' },
             { label: 'Atrasados', value: supportStats.overdue, tone: 'text-rose-300', accent: 'bg-rose-500/10' },
+            { label: '1ª resposta (min)', value: supportStats.averageFirstResponseMinutes, tone: 'text-cyan-300', accent: 'bg-cyan-500/10' },
+            { label: 'Resolução média (h)', value: supportStats.averageResolutionHours, tone: 'text-indigo-300', accent: 'bg-indigo-500/10' }
           ].map((metric) => (
             <div key={metric.label} className={`rounded-xl border border-white/[0.08] ${metric.accent} p-3`}>
               <p className="text-[10px] uppercase tracking-[0.14em] text-slate-400">{metric.label}</p>
@@ -504,7 +519,7 @@ export function OperationsWorkspace({ initialModule = 'projects', permissions }:
           </select>
           <select aria-label="Filtrar por setor" value={sectorFilter} onChange={(event) => setSectorFilter(event.target.value)} className={`${inputClass} w-auto min-w-36 py-2 text-xs`}>
             <option value="">Todos os setores</option>
-            {supportSectors.map((sector) => <option key={sector}>{sector}</option>)}
+{Array.from(new Set([...supportSectors, ...tickets.map((ticket) => ticket.sector).filter(Boolean)])).map((sector) => <option key={sector}>{sector}</option>)}
           </select>
           <select aria-label="Filtrar por status" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} className={`${inputClass} w-auto min-w-40 py-2 text-xs`}>
             <option value="">Todos os status</option>
@@ -516,7 +531,7 @@ export function OperationsWorkspace({ initialModule = 'projects', permissions }:
           </select>
           <select aria-label="Filtrar por responsável" value={responsibleFilter} onChange={(event) => setResponsibleFilter(event.target.value)} className={`${inputClass} w-auto min-w-36 py-2 text-xs`}>
             <option value="">Todos responsáveis</option>
-            {Array.from(new Set(tickets.map((ticket) => ticket.technical_responsible_id).filter((id): id is string => Boolean(id)))).map((id) => <option key={id} value={id}>{members.find((member) => member.id === id)?.full_name ?? id}</option>)}
+            {Array.from(new Set(tickets.map((ticket) => ticket.technical_responsible_id).filter((id): id is string => Boolean(id)))).map((id) => <option key={id} value={id}>{members.find((member) => member.user_id === id)?.full_name ?? id}</option>)}
           </select>
           <select aria-label="Filtrar por período" value={periodFilter} onChange={(event) => setPeriodFilter(event.target.value)} className={`${inputClass} w-auto min-w-34 py-2 text-xs`}>
             <option value="">Qualquer período</option>
@@ -595,7 +610,7 @@ export function OperationsWorkspace({ initialModule = 'projects', permissions }:
                   return (
                     <tr key={item.id} className="border-b border-white/[0.05] last:border-0">
                       <td className="px-5 py-3 font-medium text-slate-200">{'ticket_number' in item ? `${item.ticket_number} · ${item.subject}` : item.title}</td>
-                      {'ticket_number' in item && <><td className="px-5 py-3 text-slate-400">{normalizeSupportPriority(item.priority)}</td><td className="px-5 py-3 text-slate-400">{item.sector}</td><td className="px-5 py-3 text-slate-400">{members.find((member) => member.id === item.technical_responsible_id)?.full_name ?? item.technical_responsible_id ?? '—'}</td><td className="px-5 py-3 text-slate-400">{formatShortDate(item.due_at)}</td></>}
+                      {'ticket_number' in item && <><td className="px-5 py-3 text-slate-400">{normalizeSupportPriority(item.priority)}</td><td className="px-5 py-3 text-slate-400">{item.sector}</td><td className="px-5 py-3 text-slate-400">{members.find((member) => member.user_id === item.technical_responsible_id)?.full_name ?? item.technical_responsible_id ?? 'Fila de triagem'}</td><td className="px-5 py-3 text-slate-400">{formatShortDate(item.due_at)}</td></>}
                       <td className="px-5 py-3 text-slate-400">{'ticket_number' in item ? item.requester : item.requester}</td>
                       <td className="px-5 py-3 text-slate-500">{'ticket_number' in item ? normalizeSupportStatus(item.status) : item.status}</td>
                       <td className="px-5 py-3 text-right">
@@ -614,7 +629,7 @@ export function OperationsWorkspace({ initialModule = 'projects', permissions }:
                     <td className="px-5 py-3 font-medium text-slate-200">{`${item.ticket_number} · ${item.subject}`}</td>
                     <td className="px-5 py-3 text-slate-300"><span className={`inline-flex rounded-full px-2 py-1 text-[10px] font-medium ${((supportPriorityColors as Record<string, string>)[normalizeSupportPriority(item.priority)] ?? 'bg-slate-500/10 text-slate-200')}`}>{normalizeSupportPriority(item.priority)}</span></td>
                     <td className="px-5 py-3 text-slate-400">{item.sector}</td>
-                    <td className="px-5 py-3 text-slate-400">{members.find((member) => member.id === item.technical_responsible_id)?.full_name ?? item.technical_responsible_id ?? '—'}</td>
+                    <td className="px-5 py-3 text-slate-400">{members.find((member) => member.user_id === item.technical_responsible_id)?.full_name ?? item.technical_responsible_id ?? 'Fila de triagem'}</td>
                     <td className="px-5 py-3 text-slate-400">{formatShortDate(item.due_at)}</td>
                     <td className="px-5 py-3 text-slate-300"><span className={`inline-flex rounded-full px-2 py-1 text-[10px] font-medium ${((supportStatusColors as Record<string, string>)[normalizeSupportStatus(item.status)] ?? 'bg-slate-500/10 text-slate-200')}`}>{normalizeSupportStatus(item.status)}</span></td>
                     <td className="px-5 py-3 text-right">
@@ -666,7 +681,7 @@ export function OperationsWorkspace({ initialModule = 'projects', permissions }:
         <label className="text-xs text-slate-400">Solicitante<input name="requester" required defaultValue={record.requester} className={`${inputClass} mt-1`} /></label>
         <label className="text-xs text-slate-400">Categoria<input name="category" required defaultValue={record.category} className={`${inputClass} mt-1`} /></label>
         {'ticket_number' in record && <label className="text-xs text-slate-400">Setor responsável<select name="sector" required value={editingSector} onChange={(event) => setEditingSector(event.target.value)} className={`${inputClass} mt-1`}>{supportSectors.map((sector) => <option key={sector}>{sector}</option>)}</select></label>}
-        {'ticket_number' in record && canAssign && <label className="text-xs text-slate-400">Responsável<select name="technical_responsible_id" defaultValue={record.technical_responsible_id ?? ''} className={`${inputClass} mt-1`}><option value="">Atribuição automática do setor</option>{membersForSector(editingSector).map((member) => <option key={member.id} value={member.id}>{member.full_name}</option>)}</select></label>}
+        {'ticket_number' in record && canAssign && <label className="text-xs text-slate-400">Responsável<select name="technical_responsible_id" defaultValue={record.technical_responsible_id ?? ''} className={`${inputClass} mt-1`}><option value="">Atribuição automática do setor</option>{membersForSector(editingSector).filter((member) => member.user_id).map((member) => <option key={member.user_id} value={member.user_id!}>{member.full_name}</option>)}</select></label>}
         <label className="text-xs text-slate-400">Prioridade<select name="priority" defaultValue={normalizeSupportPriority(record.priority)} className={`${inputClass} mt-1`}>
           {supportPriorities.map((priority) => <option key={priority}>{priority}</option>)}
         </select></label>
@@ -682,7 +697,7 @@ export function OperationsWorkspace({ initialModule = 'projects', permissions }:
         <div className="flex justify-end gap-2 sm:col-span-2"><button type="button" onClick={() => setEditingRecord(false)} className="rounded-lg px-3 py-2 text-xs text-slate-300">Cancelar</button><button disabled={saving} className="rounded-lg bg-cyan-500 px-4 py-2 text-xs font-semibold text-slate-950">{saving ? 'Salvando...' : 'Salvar alterações'}</button></div>
       </form> : <><div className="grid gap-4 text-sm sm:grid-cols-2"><p className="text-slate-400">Solicitante<span className="mt-1 block text-slate-200">{record.requester}</span></p><p className="text-slate-400">Status / prioridade<span className="mt-1 block text-slate-200">{normalizeSupportStatus('ticket_number' in record ? record.status : record.status)} · {normalizeSupportPriority('ticket_number' in record ? record.priority : record.priority)}</span></p><p className="text-slate-400">Categoria<span className="mt-1 block text-slate-200">{record.category}</span></p>{'ticket_number' in record && <>
         <p className="text-slate-400">Setor responsável<span className="mt-1 block text-slate-200">{record.sector}</span></p>
-        <p className="text-slate-400">Responsável<span className="mt-1 block text-slate-200">{members.find((member) => member.id === record.technical_responsible_id)?.full_name ?? record.technical_responsible_id ?? '—'}</span></p>
+        <p className="text-slate-400">Responsável<span className="mt-1 block text-slate-200">{members.find((member) => member.user_id === record.technical_responsible_id)?.full_name ?? record.technical_responsible_id ?? 'Fila de triagem'}</span></p>
         <p className="text-slate-400">Prazo<span className="mt-1 block text-slate-200">{record.due_at ? new Date(record.due_at).toLocaleString('pt-BR') : 'Não definido'}</span></p>
         <p className="text-slate-400">Horário agendado<span className="mt-1 block text-slate-200">{record.scheduled_at ? new Date(record.scheduled_at).toLocaleString('pt-BR') : 'Não definido'}</span></p>
         <p className="text-slate-400">Resolvido em<span className="mt-1 block text-slate-200">{record.resolved_at ? new Date(record.resolved_at).toLocaleString('pt-BR') : '—'}</span></p>

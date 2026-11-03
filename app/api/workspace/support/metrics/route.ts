@@ -13,6 +13,8 @@ export async function GET(request: Request) {
     const period = url.searchParams.get('period') ?? '30d'
     const sector = url.searchParams.get('sector')
     const priority = url.searchParams.get('priority')
+    const status = url.searchParams.get('status')
+    const responsible = url.searchParams.get('responsible')
     const from = new Date()
     if (period === '7d') from.setDate(from.getDate() - 7)
     else if (period === '90d') from.setDate(from.getDate() - 90)
@@ -20,10 +22,13 @@ export async function GET(request: Request) {
 
     let query = actor.supabase
       .from('support_tickets')
-      .select('id,status,priority,sector,created_at,first_response_at,resolved_at,due_at')
+      .select('id,status,priority,sector,technical_responsible_id,created_at,first_response_at,resolved_at,due_at,archived_at')
+      .is('archived_at', null)
       .gte('created_at', from.toISOString())
     if (sector) query = query.eq('sector', sector)
     if (priority) query = query.eq('priority', priority)
+    if (status) query = query.eq('status', status)
+    if (responsible) query = query.eq('technical_responsible_id', responsible)
     const { data, error } = await query
     if (error) throw new AdminApiError('Não foi possível carregar as métricas de suporte.', 503)
 
@@ -41,6 +46,10 @@ export async function GET(request: Request) {
       slaBreaches,
       averageFirstResponseMinutes: Math.round(average(responseTimes) / 60000),
       averageResolutionHours: Math.round(average(resolutionTimes) / 3600000),
+      resolutionRate: tickets.length ? Math.round((resolved.length / tickets.length) * 100) : 0,
+      overdue: slaBreaches,
+      byPriority: Object.entries(Object.groupBy(tickets, (ticket) => ticket.priority)).map(([name, rows]) => ({ name, count: rows?.length ?? 0 })),
+      byResponsible: Object.entries(Object.groupBy(tickets, (ticket) => ticket.technical_responsible_id ?? 'triagem')).map(([name, rows]) => ({ name, count: rows?.length ?? 0 })),
       byStatus: Object.entries(Object.groupBy(tickets, (ticket) => ticket.status)).map(([status, rows]) => ({ status, count: rows?.length ?? 0 })),
       bySector: Object.entries(Object.groupBy(tickets, (ticket) => ticket.sector)).map(([name, rows]) => ({ name, count: rows?.length ?? 0 })),
     }, { headers: { 'Cache-Control': 'private, no-store' } })
