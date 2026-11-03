@@ -30,7 +30,7 @@ type License = {
 }
 type LicenseData = { clients: Client[]; systems: System[]; licenses: License[] }
 type RouteMapping = { id: string; system_module_id: string; route_pattern: string; blocked_path: string }
-type RotaAnalysis = { tabs: string[]; detectedTabs: Array<{ tab: string; code: string; confidence: number; hasContent: boolean; hasTrigger: boolean }>; mappings: Array<{ tab: string; code: string }>; sharedComponents: string[]; warnings: string[]; uncertain: string[]; requiresConfirmation: boolean }
+type RotaAnalysis = { tabs: string[]; detectedTabs: Array<{ tab: string; code: string; confidence: number; hasContent: boolean; hasTrigger: boolean; navigationElements?: string[]; contentEvidence?: string[]; functionalities?: string[]; dependencies?: string[] }>; mappings: Array<{ tab: string; code: string }>; sharedComponents: string[]; warnings: string[]; uncertain: string[]; requiresConfirmation: boolean }
 
 const inputClass = 'field rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-2.5 text-sm text-slate-200 outline-none placeholder:text-slate-600 focus:border-blue-400/60'
 const statusNames: Record<string, string> = { active: 'Ativa', suspended: 'Suspensa', revoked: 'Revogada' }

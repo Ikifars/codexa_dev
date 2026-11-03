@@ -6,7 +6,17 @@ import * as t from '@babel/types'
 export type IntegrationModule = { code: string; name: string }
 export type TabMapping = { code: string; tab: string }
 
-export type DetectedTab = { tab: string; code: string; confidence: number; hasContent: boolean; hasTrigger: boolean }
+export type DetectedTab = {
+  tab: string
+  code: string
+  confidence: number
+  hasContent: boolean
+  hasTrigger: boolean
+  navigationElements: string[]
+  contentEvidence: string[]
+  functionalities: string[]
+  dependencies: string[]
+}
 
 export type RotaUnicaAnalysis = {
   stateName: string
@@ -20,6 +30,33 @@ export type RotaUnicaAnalysis = {
 }
 
 function unique(values: string[]) { return [...new Set(values)] }
+
+const NON_MODULE_VALUES = new Set([
+  'loading', 'loaded', 'error', 'idle', 'open', 'closed', 'true', 'false', 'all', 'none',
+  'login', 'signup', 'authenticated', 'unauthenticated', 'modal', 'dialog', 'filter', 'search',
+  'create', 'edit', 'view', 'details', 'form', 'step', 'page', 'tab', 'menu', 'active', 'inactive',
+])
+
+function cleanNavigationValue(value: string) {
+  const normalized = value.trim().replace(/^['"`]|['"`]$/g, '').replace(/^\/+|\/+$/g, '')
+  if (!normalized || NON_MODULE_VALUES.has(normalized.toLowerCase())) return ''
+  if (normalized.length > 80 || /\s{2,}/.test(normalized)) return ''
+  return normalized
+}
+
+function navigationCandidates(source: string) {
+  const values = [
+    ...[...source.matchAll(/(?:set[A-Z][A-Za-z0-9_]*|onSelect|onChange|navigate|goTo|selectModule|setActive[A-Za-z0-9_]*)\s*\(\s*['"`]([^'"`]+)['"`]/g)].map((match) => match[1]),
+    ...[...source.matchAll(/(?:data-(?:tab|module|section)|aria-controls|value|href|to)\s*=\s*['"`]([^'"`]+)['"`]/g)].map((match) => match[1]),
+    ...[...source.matchAll(/case\s+['"`]([^'"`]+)['"`]/g)].map((match) => match[1]),
+    ...[...source.matchAll(/(?:id|key|slug|value)\s*:\s*['"`]([^'"`]+)['"`]/g)].map((match) => match[1]),
+  ]
+  return unique(values.map(cleanNavigationValue).filter(Boolean))
+}
+
+function candidateAliases(value: string) {
+  return unique([value, value.replace(/[-_]/g, ' '), value.split('/').filter(Boolean).pop() ?? value])
+}
 
 const adminClientParserOptions = {
   sourceType: 'module' as const,
@@ -75,24 +112,38 @@ export function analyzeAdminClient(source: string, modules: IntegrationModule[])
       if (detectedValues.length > 0 && !stateName) { stateName = state.name; tabs.push(...detectedValues) }
     },
   })
-  const routeCandidates = unique([...source.matchAll(/(?:href|to|push|replace)\s*[=(]\s*[`'\"]([^`'\"]+)[`'\"]/g)].map((match) => match[1]).filter((value) => value.startsWith('/')))
-  const componentCandidates = unique([...source.matchAll(/(?:component|element)\s*=\s*\{?([A-Z][A-Za-z0-9_]*)/g)].map((match) => match[1]))
-  const normalizedTabs = unique([...tabs, ...routeCandidates, ...componentCandidates])
+  const routeCandidates = navigationCandidates(source)
+  const componentCandidates = unique([
+    ...[...source.matchAll(/(?:component|element|content|view|panel|page)\s*=\s*\{?([A-Z][A-Za-z0-9_]*)/g)].map((match) => match[1]),
+    ...[...source.matchAll(/(?:return|=>)\s*<([A-Z][A-Za-z0-9_]*)/g)].map((match) => match[1]),
+  ])
+  const normalizedTabs = unique([...tabs, ...routeCandidates].map(cleanNavigationValue).filter(Boolean))
   const sourceText = generate(ast).code
-  const sharedComponents = unique([...sourceText.matchAll(/<([A-Z][A-Za-z0-9_]*)/g)].map((match) => match[1]).filter((name) => !['AdminClient', 'Fragment'].includes(name)))
+  const sharedComponents = unique([...componentCandidates, ...[...sourceText.matchAll(/<([A-Z][A-Za-z0-9_]*)/g)].map((match) => match[1])].filter((name) => !['AdminClient', 'Fragment'].includes(name)))
   const detectedTabs: DetectedTab[] = normalizedTabs.map((tab) => {
     const escaped = tab.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
     const tabPattern = new RegExp(escaped, 'g')
     const occurrences = source.match(tabPattern)?.length ?? 0
-    const hasTrigger = new RegExp(`set[A-Z][A-Za-z0-9_]*\\s*\\(\\s*['\"]${escaped}['\"]`).test(source)
-    const hasContent = occurrences > 1 || new RegExp(`['\"]${escaped}['\"]\\s*===|===\\s*['\"]${escaped}['\"]`).test(source)
-    const candidates = modules.filter((module) => {
-      const codeEvidence = new RegExp(`(?:['\"]${module.code}['\"]|\\b${module.code}\\b)`).test(source)
-      const nameEvidence = module.name.split(/\s+/).filter((word) => word.length > 3).some((word) => new RegExp(word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i').test(source))
-      return codeEvidence || nameEvidence
-    })
-    const candidate = candidates.length === 1 ? candidates[0].code : ''
-    return { tab, code: candidate, confidence: candidate ? (source.includes(candidate) ? 0.95 : 0.72) : 0, hasContent, hasTrigger }
+    const hasTrigger = new RegExp(`(?:set[A-Z][A-Za-z0-9_]*|onSelect|onChange|navigate|goTo|selectModule)\\s*\\(\\s*['\"]/?(?:[^'\"]*/)?${escaped}['\"]`).test(source)
+    const hasContent = occurrences > 1 || new RegExp(`(?:['\"]${escaped}['\"]\\s*===|===\\s*['\"]${escaped}['\"]|case\\s+['\"]${escaped}['\"]|active[A-Za-z0-9_]*\\s*===\\s*['\"]${escaped}['\"])`).test(source)
+    const contextStart = Math.max(0, source.indexOf(tab) - 260)
+    const contextEnd = Math.min(source.length, source.indexOf(tab) + tab.length + 520)
+    const context = source.slice(contextStart, contextEnd)
+    const candidates = modules.map((module) => {
+      const codeEvidence = new RegExp(`(?:['\"]${module.code}['\"]|\\b${module.code}\\b)`, 'i').test(context)
+      const nameEvidence = module.name.split(/\s+/).filter((word) => word.length > 3).some((word) => new RegExp(word.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\$&'), 'i').test(context))
+      const aliasEvidence = candidateAliases(tab).some((alias) => module.code.toLowerCase() === alias.toLowerCase() || module.name.toLowerCase().includes(alias.toLowerCase()))
+      const score = (codeEvidence ? 0.62 : 0) + (nameEvidence ? 0.25 : 0) + (aliasEvidence ? 0.3 : 0) + (hasTrigger ? 0.08 : 0) + (hasContent ? 0.08 : 0)
+      return { code: module.code, score }
+    }).sort((left, right) => right.score - left.score)
+    const candidate = candidates[0]?.score >= 0.62 && candidates[0].score - (candidates[1]?.score ?? 0) >= 0.12 ? candidates[0].code : ''
+    const confidence = candidate ? Math.min(0.99, Number((candidates[0].score).toFixed(2))) : 0
+    const navigationElements = [...context.matchAll(/(?:button|a|Link|nav|menu|set[A-Z][A-Za-z0-9_]*|navigate|goTo|onSelect|onChange)/g)].map((match) => match[0]).filter((value, index, values) => values.indexOf(value) === index).slice(0, 8)
+    const contentEvidence = [...context.matchAll(/(?:return\s+<|case\s+|&&\s*<|switch\s*\()/g)].map((match) => match[0].trim()).filter((value, index, values) => values.indexOf(value) === index).slice(0, 8)
+    const functionalityNames = [['create', 'criação'], ['add', 'inclusão'], ['edit', 'edição'], ['update', 'atualização'], ['delete', 'exclusão'], ['remove', 'remoção'], ['upload', 'upload'], ['download', 'download'], ['fetch', 'consulta'], ['search', 'busca']]
+    const functionalities = functionalityNames.filter(([token]) => new RegExp(`\\b${token}\\b`, 'i').test(context)).map(([, label]) => label)
+    const dependencies = [...context.matchAll(/<([A-Z][A-Za-z0-9_]*)/g)].map((match) => match[1]).filter((name, index, values) => values.indexOf(name) === index).slice(0, 8)
+    return { tab, code: candidate, confidence, hasContent, hasTrigger, navigationElements, contentEvidence, functionalities, dependencies }
   })
   const mappings = detectedTabs.filter((item) => item.code && item.confidence >= 0.9).map(({ tab, code }) => ({ tab, code }))
   const uncertain = detectedTabs.filter((item) => !item.code || item.confidence < 0.9).map((item) => item.tab)
@@ -104,23 +155,31 @@ export function analyzeAdminClient(source: string, modules: IntegrationModule[])
 
 function addAllowedProp(ast: t.File) {
   let changed = false
+  const addToParams = (params: t.FunctionDeclaration['params'] | t.ArrowFunctionExpression['params']) => {
+    if (!params.length) {
+      params.push(t.objectPattern([t.objectProperty(t.identifier('allowedModules'), t.identifier('allowedModules'))]))
+      return true
+    }
+    const first = params[0]
+    if (!t.isObjectPattern(first)) return false
+    if (first.properties.some((property) => t.isObjectProperty(property) && t.isIdentifier(property.key, { name: 'allowedModules' }))) return true
+    first.properties.push(t.objectProperty(t.identifier('allowedModules'), t.identifier('allowedModules')))
+    return true
+  }
   traverse(ast, {
     FunctionDeclaration(path) {
-      if (!path.node.id?.name || path.node.params.length > 0) return
-      if (!path.node.body || !t.isBlockStatement(path.node.body)) return
+      if (!path.node.id?.name || !path.node.body || !t.isBlockStatement(path.node.body)) return
       if (!path.node.body.body.some((statement) => t.isReturnStatement(statement))) return
-      path.node.params.push(t.objectPattern([t.objectProperty(t.identifier('allowedModules'), t.identifier('allowedModules'))]))
-      changed = true
-      path.stop()
+      changed = addToParams(path.node.params)
+      if (changed) path.stop()
     },
     VariableDeclarator(path) {
       if (!t.isIdentifier(path.node.id) || !t.isArrowFunctionExpression(path.node.init)) return
       const fn = path.node.init
-      if (fn.params.length > 0 || (!t.isBlockStatement(fn.body) && !t.isJSXElement(fn.body))) return
+      if (!t.isBlockStatement(fn.body) && !t.isJSXElement(fn.body)) return
       if (t.isBlockStatement(fn.body) && !fn.body.body.some((statement) => t.isReturnStatement(statement))) return
-      fn.params.push(t.objectPattern([t.objectProperty(t.identifier('allowedModules'), t.identifier('allowedModules'))]))
-      changed = true
-      path.stop()
+      changed = addToParams(fn.params)
+      if (changed) path.stop()
     },
   })
   return changed
