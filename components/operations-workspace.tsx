@@ -41,6 +41,7 @@ type SupportMessage = {
   actor_name?: string | null
 }
 
+type SupportAttachment = { id: string; ticket_id: string; pathname: string; filename: string; content_type: string; byte_size: number; created_at: string }
 type SupportViewMode = 'lista' | 'kanban'
 
 const modules = [
@@ -163,6 +164,9 @@ export function OperationsWorkspace({ initialModule = 'projects', permissions }:
   const [record, setRecord] = useState<OperationalRecord | null>(null)
   const [editingRecord, setEditingRecord] = useState(false)
   const [ticketMessages, setTicketMessages] = useState<SupportMessage[]>([])
+  const [ticketAttachments, setTicketAttachments] = useState<SupportAttachment[]>([])
+  const [attachmentFile, setAttachmentFile] = useState<File | null>(null)
+  const [attachmentSaving, setAttachmentSaving] = useState(false)
   const [messageDraft, setMessageDraft] = useState('')
   const [messageType, setMessageType] = useState<'internal' | 'external'>('internal')
   const [messageSaving, setMessageSaving] = useState(false)
@@ -323,7 +327,37 @@ export function OperationsWorkspace({ initialModule = 'projects', permissions }:
     setRecord(item)
     setEditingRecord(true)
     setEditingSector('sector' in item ? item.sector : '')
+    setAttachmentFile(null)
     setError('')
+    if ('ticket_number' in item) {
+      void loadTicketMessages(item.id)
+      void loadTicketAttachments(item.id)
+    }
+  }
+
+  async function loadTicketAttachments(ticketId: string) {
+    const response = await fetch(`/api/workspace/support/attachments?ticketId=${encodeURIComponent(ticketId)}`)
+    if (!response.ok) return setTicketAttachments([])
+    const data = await response.json()
+    setTicketAttachments(Array.isArray(data) ? data : [])
+  }
+
+  async function uploadTicketAttachment() {
+    if (!record || !('ticket_number' in record) || !attachmentFile) return
+    setAttachmentSaving(true)
+    setError('')
+    const formData = new FormData()
+    formData.set('ticketId', record.id)
+    formData.set('file', attachmentFile)
+    const response = await fetch('/api/workspace/support/attachments', { method: 'POST', body: formData })
+    if (!response.ok) {
+      const body = await response.json().catch(() => null)
+      setError(body?.error ?? 'Não foi possível enviar o anexo.')
+    } else {
+      setAttachmentFile(null)
+      await loadTicketAttachments(record.id)
+    }
+    setAttachmentSaving(false)
   }
 
   async function loadTicketMessages(ticketId: string) {
@@ -706,6 +740,16 @@ export function OperationsWorkspace({ initialModule = 'projects', permissions }:
       </>}
       {'ticket_number' in record ? null : <p className="whitespace-pre-wrap text-slate-300 sm:col-span-2">{record.description || 'Sem descrição cadastrada.'}</p>}
       </div>
+      {'ticket_number' in record && <div className="mt-5 rounded-xl border border-white/[0.08] bg-[#0d141b] p-4">
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <h4 className="text-sm font-semibold text-white">Anexos</h4>
+          <span className="text-[10px] uppercase tracking-[0.12em] text-slate-500">{ticketAttachments.length} arquivo(s)</span>
+        </div>
+        <div className="space-y-2">
+          {ticketAttachments.length === 0 ? <p className="text-xs text-slate-500">Nenhum anexo neste chamado.</p> : ticketAttachments.map((attachment) => <a key={attachment.id} href={`/api/workspace/support/attachments/file?pathname=${encodeURIComponent(attachment.pathname)}`} className="flex items-center justify-between rounded-lg border border-white/[0.06] px-3 py-2 text-xs text-cyan-300 hover:bg-white/[0.04]"><span className="truncate">{attachment.filename}</span><span className="ml-3 shrink-0 text-slate-500">{Math.ceil(attachment.byte_size / 1024)} KB</span></a>)}
+        </div>
+        {canUpdate && <div className="mt-3 flex flex-wrap items-center gap-2"><input type="file" onChange={(event) => setAttachmentFile(event.target.files?.[0] ?? null)} className="max-w-full text-xs text-slate-400 file:mr-2 file:rounded-md file:border-0 file:bg-white/10 file:px-2 file:py-1 file:text-xs file:text-slate-200" /><button type="button" onClick={() => void uploadTicketAttachment()} disabled={!attachmentFile || attachmentSaving} className="rounded-lg bg-cyan-500 px-3 py-2 text-xs font-semibold text-slate-950 disabled:opacity-60">{attachmentSaving ? 'Enviando...' : 'Enviar anexo'}</button></div>}
+      </div>}
       {'ticket_number' in record && <div className="mt-5 rounded-xl border border-white/[0.08] bg-[#0d141b] p-4">
         <div className="mb-3 flex items-center justify-between gap-3">
           <h4 className="text-sm font-semibold text-white">Linha do tempo</h4>
