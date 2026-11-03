@@ -39,6 +39,7 @@ type SupportMessage = {
   content: string
   created_at: string
   actor_name?: string | null
+  author_name?: string | null
 }
 
 type SupportAttachment = { id: string; ticket_id: string; pathname: string; filename: string; content_type: string; byte_size: number; created_at: string }
@@ -364,7 +365,7 @@ export function OperationsWorkspace({ initialModule = 'projects', permissions }:
     const supabase = createClient()
     const { data, error: messagesError } = await supabase
       .from('support_messages')
-      .select('id,ticket_id,message_type,content,created_at,actor_name')
+      .select('id,ticket_id,message_type,content,created_at,actor_name,author_name')
       .eq('ticket_id', ticketId)
       .order('created_at', { ascending: true })
 
@@ -391,6 +392,7 @@ export function OperationsWorkspace({ initialModule = 'projects', permissions }:
       message_type: messageType,
       content: messageDraft.trim(),
       actor_name: actorName,
+      author_name: actorName,
       created_by: actor?.id ?? null,
     })
 
@@ -760,7 +762,7 @@ export function OperationsWorkspace({ initialModule = 'projects', permissions }:
             <div key={message.id} className={`rounded-lg border p-3 ${message.message_type === 'internal' ? 'border-violet-500/20 bg-violet-500/5' : 'border-cyan-500/20 bg-cyan-500/5'}`}>
               <div className="mb-1 flex items-center justify-between gap-2 text-[10px] uppercase tracking-[0.12em] text-slate-400">
                 <span>{message.message_type === 'internal' ? 'Interno' : 'Externo'}</span>
-                <span>{new Date(message.created_at).toLocaleString('pt-BR')}</span>
+                <span>{message.author_name ?? message.actor_name ?? 'Equipe Codexa'} · {new Date(message.created_at).toLocaleString('pt-BR')}</span>
               </div>
               <p className="text-sm text-slate-200 whitespace-pre-wrap">{message.content}</p>
             </div>
