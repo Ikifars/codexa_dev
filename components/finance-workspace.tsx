@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
-import { AlertTriangle, CircleDollarSign, Download, Eye, Pencil, Plus, RefreshCw, Search, TrendingDown, TrendingUp, WalletCards, X } from 'lucide-react'
+import { AlertTriangle, CircleDollarSign, Download, Eye, Pencil, Plus, RefreshCw, Search, Trash2, TrendingDown, TrendingUp, WalletCards, X } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { ListingControls } from '@/components/listing-controls'
 
@@ -75,6 +75,7 @@ export function FinanceWorkspace({ initialTab = 'overview', permissions = [] }: 
   const permissionModule = tab === 'payable' ? 'accounts_payable' : 'accounts_receivable'
   const canCreate = permissions.includes('*') || permissions.includes(`${permissionModule}:create`)
   const canUpdate = permissions.includes('*') || permissions.includes(`${permissionModule}:update`)
+  const canDelete = permissions.includes('*') || permissions.includes(`${permissionModule}:delete`)
 
   async function load() {
     setLoading(true)
@@ -109,6 +110,14 @@ export function FinanceWorkspace({ initialTab = 'overview', permissions = [] }: 
     if (insertError) setMessage(`Não foi possível salvar o lançamento: ${insertError.message}`)
     else { setMessage('Lançamento criado.'); setShowForm(false); setForm({ description: '', amount: '', due_date: '' }); await load() }
     setSaving(false)
+  }
+
+  async function deleteRecord(item: FinanceRecord) {
+    if (!canDelete || !window.confirm(`Excluir o lançamento “${'beneficiary' in item ? item.beneficiary : item.description}”? Esta ação não pode ser desfeita.`)) return
+    const table = tab === 'payable' ? 'accounts_payable' : 'accounts_receivable'
+    const { error: deleteError } = await createClient().from(table).delete().eq('id', item.id)
+    if (deleteError) setMessage(`Não foi possível excluir o lançamento: ${deleteError.message}`)
+    else { setRecord(null); setEditingRecord(false); setMessage('Lançamento excluído.'); await load() }
   }
 
   async function saveRecord(event: FormEvent<HTMLFormElement>) {
@@ -614,6 +623,7 @@ export function FinanceWorkspace({ initialTab = 'overview', permissions = [] }: 
                   </div>
                   <button onClick={() => { setRecord(item); setEditingRecord(false); setMessage('') }} aria-label="Ver detalhes" className="rounded p-2 text-slate-400 hover:bg-white/5 hover:text-white"><Eye className="size-4" /></button>
                   {canUpdate && <button onClick={() => { setRecord(item); setEditingRecord(true); setMessage('') }} aria-label="Editar lançamento" className="rounded p-2 text-slate-400 hover:bg-white/5 hover:text-white"><Pencil className="size-4" /></button>}
+                  {canDelete && <button onClick={() => void deleteRecord(item)} aria-label="Excluir lançamento" className="rounded p-2 text-slate-500 hover:bg-rose-500/10 hover:text-rose-300"><Trash2 className="size-4" /></button>}
                 </div>
               </div>
             ))}

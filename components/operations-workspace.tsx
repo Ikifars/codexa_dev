@@ -40,6 +40,7 @@ type SupportMessage = {
   created_at: string
   actor_name?: string | null
   author_name?: string | null
+  created_by?: string | null
 }
 
 type SupportAttachment = { id: string; ticket_id: string; pathname: string; filename: string; content_type: string; byte_size: number; created_at: string }
@@ -171,15 +172,21 @@ export function OperationsWorkspace({ initialModule = 'projects', permissions }:
   const [messageDraft, setMessageDraft] = useState('')
   const [messageType, setMessageType] = useState<'internal' | 'external'>('internal')
   const [messageSaving, setMessageSaving] = useState(false)
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [error, setError] = useState('')
   const permissionModule = module === 'support_tickets' ? 'support' : module
   const canCreate = permissions.includes('*') || permissions.includes(`${permissionModule}:create`)
   const canUpdate = permissions.includes('*') || permissions.includes(`${permissionModule}:update`)
   const canDelete = permissions.includes('*') || permissions.includes(`${permissionModule}:delete`)
   const canAssign = permissions.includes('*') || permissions.includes('support:assign')
+  const canDeleteTicket = (item: Ticket) => canDelete || Boolean(currentUserId && item.technical_responsible_id === currentUserId)
   const availableModules = modules.filter(([key]) => hasWorkspaceAccess(permissions, key === 'support_tickets' ? 'suporte' : key === 'change_requests' ? 'solicitacoes' : 'projetos'))
 
   useEffect(() => {
+    void (async () => {
+      const { data } = await createClient().auth.getUser()
+      setCurrentUserId(data.user?.id ?? null)
+    })()
     setModule(initialModule)
     setQuery('')
     setCategoryFilter('')
@@ -376,6 +383,16 @@ export function OperationsWorkspace({ initialModule = 'projects', permissions }:
     setTicketMessages((data ?? []) as SupportMessage[])
   }
 
+  async function deleteTicketMessage(message: SupportMessage) {
+    const isAdmin = permissions.includes('*')
+    const isAuthor = Boolean(currentUserId && message.created_by === currentUserId)
+    const isResponsible = Boolean(record && 'ticket_number' in record && currentUserId && record.technical_responsible_id === currentUserId)
+    if (!(isAdmin || isAuthor || isResponsible) || !window.confirm('Excluir esta interação da linha do tempo?')) return
+    const { error: deleteError } = await createClient().from('support_messages').delete().eq('id', message.id)
+    if (deleteError) setError(`Não foi possível excluir a interação: ${deleteError.message}`)
+    else if (record) await loadTicketMessages(record.id)
+  }
+
   async function submitTicketMessage(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (!record || !('ticket_number' in record) || !messageDraft.trim()) return
@@ -407,14 +424,15 @@ export function OperationsWorkspace({ initialModule = 'projects', permissions }:
     setMessageSaving(false)
   }
 
-  async function remove(id: string) {
-    if (!canDelete || !window.confirm(module === 'support_tickets' ? 'Arquivar este chamado? O histórico será preservado.' : 'Excluir este registro?')) return
+  async function remove(id: string, item?: OperationalRecord) {
+    const allowed = module === 'support_tickets' && item && 'ticket_number' in item ? canDeleteTicket(item as Ticket) : canDelete
+    if (!allowed || !window.confirm(module === 'support_tickets' ? 'Excluir este chamado e seu histórico? Esta ação não pode ser desfeita.' : 'Excluir este registro?')) return
     const table = module === 'change_requests' ? 'change_requests' : 'support_tickets'
     const mutation = module === 'support_tickets'
-      ? createClient().from(table).update({ archived_at: new Date().toISOString() }).eq('id', id)
+      ? createClient().from(table).delete().eq('id', id)
       : createClient().from(table).delete().eq('id', id)
     const { error: deleteError } = await mutation
-    if (deleteError) setError(`Não foi possível arquivar o registro: ${deleteError.message}`)
+    if (deleteError) setError(`Não foi possível excluir o registro: ${deleteError.message}`)
     else await loadData()
   }
 
@@ -653,7 +671,7 @@ export function OperationsWorkspace({ initialModule = 'projects', permissions }:
                         <div className="inline-flex gap-1">
                           <button onClick={() => { setRecord(item); setEditingRecord(false); setError('') }} aria-label="Ver detalhes" className="rounded p-1.5 text-slate-400 hover:bg-white/5 hover:text-white"><Eye className="size-3.5" /></button>
                           {canUpdate && <button onClick={() => openEditor(item)} aria-label="Editar registro" className="rounded p-1.5 text-slate-400 hover:bg-white/5 hover:text-white"><Pencil className="size-3.5" /></button>}
-                          {canDelete && <button onClick={() => void remove(item.id)} aria-label="Excluir registro" className="rounded p-1.5 text-slate-600 hover:bg-rose-500/10 hover:text-rose-300"><Trash2 className="size-3.5" /></button>}
+                          {(module !== 'support_tickets' ? canDelete : canDeleteTicket(item as Ticket)) && <button onClick={() => void remove(item.id, item as OperationalRecord)} aria-label="Excluir registro" className="rounded p-1.5 text-slate-600 hover:bg-rose-500/10 hover:text-rose-300"><Trash2 className="size-3.5" /></button>}
                         </div>
                       </td>
                     </tr>
@@ -672,7 +690,7 @@ export function OperationsWorkspace({ initialModule = 'projects', permissions }:
                       <div className="inline-flex gap-1">
                         <button onClick={() => { setRecord(item); setEditingRecord(false); setError('') }} aria-label="Ver detalhes" className="rounded p-1.5 text-slate-400 hover:bg-white/5 hover:text-white"><Eye className="size-3.5" /></button>
                         {canUpdate && <button onClick={() => openEditor(item)} aria-label="Editar registro" className="rounded p-1.5 text-slate-400 hover:bg-white/5 hover:text-white"><Pencil className="size-3.5" /></button>}
-                        {canDelete && <button onClick={() => void remove(item.id)} aria-label="Excluir registro" className="rounded p-1.5 text-slate-600 hover:bg-rose-500/10 hover:text-rose-300"><Trash2 className="size-3.5" /></button>}
+                        {(module !== 'support_tickets' ? canDelete : canDeleteTicket(item as Ticket)) && <button onClick={() => void remove(item.id, item as OperationalRecord)} aria-label="Excluir registro" className="rounded p-1.5 text-slate-600 hover:bg-rose-500/10 hover:text-rose-300"><Trash2 className="size-3.5" /></button>}
                       </div>
                     </td>
                   </tr>
@@ -762,7 +780,7 @@ export function OperationsWorkspace({ initialModule = 'projects', permissions }:
             <div key={message.id} className={`rounded-lg border p-3 ${message.message_type === 'internal' ? 'border-violet-500/20 bg-violet-500/5' : 'border-cyan-500/20 bg-cyan-500/5'}`}>
               <div className="mb-1 flex items-center justify-between gap-2 text-[10px] uppercase tracking-[0.12em] text-slate-400">
                 <span>{message.message_type === 'internal' ? 'Interno' : 'Externo'}</span>
-                <span>{message.author_name ?? message.actor_name ?? 'Equipe Codexa'} · {new Date(message.created_at).toLocaleString('pt-BR')}</span>
+                <span className="flex items-center gap-2">{message.author_name ?? message.actor_name ?? 'Equipe Codexa'} · {new Date(message.created_at).toLocaleString('pt-BR')}{(permissions.includes('*') || message.created_by === currentUserId || ('ticket_number' in record && record.technical_responsible_id === currentUserId)) && <button type="button" onClick={() => void deleteTicketMessage(message)} aria-label="Excluir interação" className="text-rose-300/70 hover:text-rose-200"><Trash2 className="size-3" /></button>}</span>
               </div>
               <p className="text-sm text-slate-200 whitespace-pre-wrap">{message.content}</p>
             </div>
