@@ -176,7 +176,7 @@ function DashboardContent({ initialSection = 'Dashboard', page, permissions, pro
   useEffect(() => {
     let active = true
     const loadAppearance = async () => {
-      const { data } = await createClient().from('user_preferences').select('theme,primary_color,secondary_color,tertiary_color,appearance_palette,accent_color,font_family,radius_scale,contrast_mode,motion_mode,navigation_collapsed,table_density').maybeSingle()
+      const { data } = await createClient().from('user_preferences').select('theme,primary_color,secondary_color,tertiary_color,background_color,surface_color,sidebar_color,header_color,text_color,muted_text_color,border_color,appearance_palette,accent_color,font_family,radius_scale,contrast_mode,motion_mode,navigation_collapsed,table_density').maybeSingle()
       if (!active) return
       if (data) applyWorkspaceAppearance({ ...defaultAppearance, ...(data as Partial<WorkspaceAppearance>) })
       else applyWorkspaceTheme(getWorkspaceThemePreference())

@@ -10,6 +10,13 @@ export type WorkspaceAppearance = {
   primary_color: string
   secondary_color: string
   tertiary_color: string
+  background_color: string
+  surface_color: string
+  sidebar_color: string
+  header_color: string
+  text_color: string
+  muted_text_color: string
+  border_color: string
   appearance_palette: string
   accent_color: AccentColor
   font_family: FontFamily
@@ -25,7 +32,14 @@ const defaultAppearance: WorkspaceAppearance = {
   primary_color: '#6485ff',
   secondary_color: '#9b7cff',
   tertiary_color: '#42c995',
-  appearance_palette: 'codexa-original',
+  background_color: '#090b10',
+  surface_color: '#11161e',
+  sidebar_color: '#0d1118',
+  header_color: '#090b10',
+  text_color: '#f8fafc',
+  muted_text_color: '#94a3b8',
+  border_color: '#253044',
+  appearance_palette: 'custom',
   accent_color: 'blue',
   font_family: 'inter',
   radius_scale: 'medium',
@@ -50,6 +64,21 @@ export function applyWorkspaceAppearance(appearance: WorkspaceAppearance): void 
   root.style.setProperty('--primary-custom-rgb', hexToRgb(appearance.primary_color))
   root.style.setProperty('--secondary-custom-rgb', hexToRgb(appearance.secondary_color))
   root.style.setProperty('--tertiary-custom-rgb', hexToRgb(appearance.tertiary_color))
+  root.style.setProperty('--workspace-background', appearance.background_color)
+  root.style.setProperty('--workspace-surface', appearance.surface_color)
+  root.style.setProperty('--workspace-sidebar', appearance.sidebar_color)
+  root.style.setProperty('--workspace-header', appearance.header_color)
+  root.style.setProperty('--workspace-text', appearance.text_color)
+  root.style.setProperty('--workspace-muted', appearance.muted_text_color)
+  root.style.setProperty('--workspace-border', appearance.border_color)
+  root.style.setProperty('--background', appearance.background_color)
+  root.style.setProperty('--card', appearance.surface_color)
+  root.style.setProperty('--popover', appearance.surface_color)
+  root.style.setProperty('--sidebar', appearance.sidebar_color)
+  root.style.setProperty('--foreground', appearance.text_color)
+  root.style.setProperty('--muted-foreground', appearance.muted_text_color)
+  root.style.setProperty('--border', appearance.border_color)
+  root.style.setProperty('--input', appearance.border_color)
   root.style.setProperty('--primary', appearance.primary_color)
   root.style.setProperty('--ring', appearance.primary_color)
   root.style.setProperty('--sidebar-primary', appearance.primary_color)

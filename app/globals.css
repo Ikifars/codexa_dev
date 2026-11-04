@@ -155,6 +155,15 @@
   --sidebar-ring: #3159d8;
 }
 
+[data-theme] .workspace-shell { background: var(--workspace-background) !important; color: var(--workspace-text); }
+[data-theme] .workspace-sidebar { background: var(--workspace-sidebar) !important; border-color: var(--workspace-border) !important; }
+[data-theme] .workspace-header { background: color-mix(in srgb, var(--workspace-header) 92%, transparent) !important; border-color: var(--workspace-border) !important; }
+[data-theme] .workspace-shell main [class*='bg-[#11161e'],
+[data-theme] .workspace-shell main [class*='bg-[#141923'],
+[data-theme] .workspace-shell [role='dialog'] [class*='bg-[#11161e'] { background: var(--workspace-surface) !important; }
+[data-theme] .workspace-shell [class*='border-white'] { border-color: color-mix(in srgb, var(--workspace-border) 72%, transparent) !important; }
+[data-theme] .workspace-shell .text-white { color: var(--workspace-text) !important; }
+[data-theme] .workspace-shell [class*='text-slate-'] { color: var(--workspace-muted); }
 [data-theme='light'] .workspace-shell { background: var(--background) !important; color: var(--foreground); }
 [data-theme='light'] .workspace-shell [class*='bg-[#'] { background-color: var(--card) !important; }
 [data-theme='light'] .workspace-shell [class*='border-white'] { border-color: var(--border) !important; }
