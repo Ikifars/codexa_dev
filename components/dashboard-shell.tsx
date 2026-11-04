@@ -54,7 +54,7 @@ import {
 } from 'lucide-react'
 
 const navigationGroups = [
-  { label: 'Workspace', items: [{ label: 'Dashboard', icon: faChartLine }, { label: 'Documentos', icon: faFolderOpen }] },
+  { label: 'Workspace', items: [{ label: 'Dashboard', icon: faChartLine }, { label: 'Visão comercial', icon: faChartLine }, { label: 'Documentos', icon: faFolderOpen }] },
   { label: 'Relacionamento', items: [
     { label: 'Leads', icon: faUserPlus },
     { label: 'Clientes', icon: faUsers },
@@ -101,7 +101,7 @@ const navigationGroups = [
 ]
 
 const sectionSlugs: Record<string, string> = {
-  Dashboard: 'dashboard', Documentos: 'documentos', Leads: 'leads', Clientes: 'clientes', Contatos: 'contatos', Propostas: 'propostas', Contratos: 'contratos',
+  Dashboard: 'dashboard', 'Visão comercial': 'comercial', Documentos: 'documentos', Leads: 'leads', Clientes: 'clientes', Contatos: 'contatos', Propostas: 'propostas', Contratos: 'contratos',
   Projetos: 'projetos', Tarefas: 'tarefas', 'Solicitações de alteração': 'solicitacoes', Suporte: 'suporte', 'Sistemas dos clientes': 'sistemas',
   Módulos: 'modulos', Planos: 'planos', Licenças: 'licencas', 'Contas a receber': 'contas-a-receber', 'Contas a pagar': 'contas-a-pagar',
   'Fluxo de caixa': 'fluxo-de-caixa', Transações: 'transacoes', 'Categorias financeiras': 'categorias-financeiras', Relatórios: 'relatorios', Equipe: 'equipe',

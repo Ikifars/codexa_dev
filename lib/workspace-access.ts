@@ -1,4 +1,5 @@
 export const workspaceAccess: Record<string, string[]> = {
+  comercial: ['dashboard_comercial:view'],
   leads: ['leads:view'],
   clientes: ['clients:view'],
   contatos: ['contacts:view'],

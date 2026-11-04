@@ -25,6 +25,7 @@ function ModuleFallback({ label }: { label: string }) {
 
 export function WorkspacePageRouter({ module, permissions, profileName }: { module: string; permissions: string[]; profileName: string }) {
   const label = workspaceLabel(module)
+  if (module === 'comercial') return <CommercialWorkspace initialTab="overview" permissions={permissions} />
   if (module === 'leads' || module === 'clientes' || module === 'contatos') return <CrmWorkspace initialModule={module === 'clientes' ? 'clients' : module === 'contatos' ? 'messages' : 'leads'} permissions={permissions} />
   if (module === 'propostas' || module === 'contratos') return <CommercialWorkspace initialTab={module === 'contratos' ? 'contracts' : 'proposals'} permissions={permissions} />
   if (module === 'projetos' || module === 'tarefas' || module === 'solicitacoes' || module === 'suporte') return <OperationsWorkspace permissions={permissions} initialModule={module === 'tarefas' ? 'projects' : module === 'solicitacoes' ? 'change_requests' : module === 'suporte' ? 'support_tickets' : 'projects'} />
