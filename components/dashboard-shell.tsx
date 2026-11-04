@@ -19,7 +19,7 @@ import { XpSettingsWorkspace } from '@/components/xp-settings-workspace'
 import { UserAvatar } from '@/components/user-avatar'
 import { createClient } from '@/lib/supabase/client'
 import { hasWorkspaceAccess } from '@/lib/workspace-access'
-import { applyWorkspaceTheme, getWorkspaceThemePreference } from '@/lib/workspace-theme'
+import { applyWorkspaceAppearance, applyWorkspaceTheme, defaultAppearance, getWorkspaceThemePreference, type WorkspaceAppearance } from '@/lib/workspace-theme'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faChartLine, faUserPlus, faUsers, faAddressBook, faFileSignature, faFileContract, faDiagramProject, faListCheck, faCodePullRequest, faHeadset, faServer, faPuzzlePiece, faLayerGroup, faKey, faArrowTrendUp, faArrowTrendDown, faChartPie, faUserShield, faUserGear, faShieldHalved, faClockRotateLeft, faUserCircle, faPalette, faGear, faMedal, faTrophy, faFolderOpen, faSliders } from '@fortawesome/free-solid-svg-icons'
 import {
@@ -174,14 +174,20 @@ function DashboardContent({ initialSection = 'Dashboard', page, permissions, pro
   }, [])
 
   useEffect(() => {
-    const applySavedTheme = () => applyWorkspaceTheme(getWorkspaceThemePreference())
-    applySavedTheme()
+    let active = true
+    const loadAppearance = async () => {
+      const { data } = await createClient().from('user_preferences').select('theme,accent_color,font_family,radius_scale,contrast_mode,motion_mode,navigation_collapsed,table_density').maybeSingle()
+      if (!active) return
+      if (data) applyWorkspaceAppearance({ ...defaultAppearance, ...(data as Partial<WorkspaceAppearance>) })
+      else applyWorkspaceTheme(getWorkspaceThemePreference())
+    }
+    void loadAppearance()
     const colorScheme = window.matchMedia('(prefers-color-scheme: light)')
     const onSystemThemeChange = () => {
-      if (getWorkspaceThemePreference() === 'system') applySavedTheme()
+      if (getWorkspaceThemePreference() === 'system') applyWorkspaceTheme('system')
     }
     colorScheme.addEventListener('change', onSystemThemeChange)
-    return () => colorScheme.removeEventListener('change', onSystemThemeChange)
+    return () => { active = false; colorScheme.removeEventListener('change', onSystemThemeChange) }
   }, [])
 
   useEffect(() => {
