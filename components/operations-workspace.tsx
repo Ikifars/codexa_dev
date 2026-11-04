@@ -23,10 +23,11 @@ type Ticket = {
   scheduled_at: string | null
   resolution: string | null
   resolved_at: string | null
+  first_response_at?: string | null
   created_at?: string | null
   updated_at?: string | null
-  first_response_at?: string | null
   closed_at?: string | null
+  archived_at?: string | null
 }
 type Member = { id: string; user_id?: string | null; full_name: string; role_name: string; status?: string | null }
 type OperationalRecord = ChangeRequest | Ticket
@@ -38,8 +39,11 @@ type SupportMessage = {
   content: string
   created_at: string
   actor_name?: string | null
+  author_name?: string | null
+  created_by?: string | null
 }
 
+type SupportAttachment = { id: string; ticket_id: string; pathname: string; filename: string; content_type: string; byte_size: number; created_at: string }
 type SupportViewMode = 'lista' | 'kanban'
 
 const modules = [
@@ -48,7 +52,7 @@ const modules = [
   ['support_tickets', Headphones, 'Suporte'],
 ] as const
 const inputClass = 'w-full rounded-lg border border-white/10 bg-[#151b24] p-3 text-sm text-white'
-const supportStatusOrder = ['Novo', 'Triagem', 'Aberto', 'Em atendimento', 'Aguardando cliente', 'Aguardando equipe interna', 'Agendado', 'Resolvido', 'Fechado', 'Cancelado']
+const supportStatusOrder = ['Novo', 'Triagem', 'Aberto', 'Em atendimento', 'Aguardando cliente', 'Aguardando equipe interna', 'Aguardando terceiro', 'Em desenvolvimento', 'Em validação', 'Agendado', 'Resolvido', 'Fechado', 'Cancelado']
 const supportStatuses = [...supportStatusOrder]
 const supportSectors = ['Suporte Técnico', 'Financeiro', 'Comercial', 'Operações']
 const supportPriorities = ['Baixa', 'Média', 'Alta', 'Crítica']
@@ -162,18 +166,27 @@ export function OperationsWorkspace({ initialModule = 'projects', permissions }:
   const [record, setRecord] = useState<OperationalRecord | null>(null)
   const [editingRecord, setEditingRecord] = useState(false)
   const [ticketMessages, setTicketMessages] = useState<SupportMessage[]>([])
+  const [ticketAttachments, setTicketAttachments] = useState<SupportAttachment[]>([])
+  const [attachmentFile, setAttachmentFile] = useState<File | null>(null)
+  const [attachmentSaving, setAttachmentSaving] = useState(false)
   const [messageDraft, setMessageDraft] = useState('')
   const [messageType, setMessageType] = useState<'internal' | 'external'>('internal')
   const [messageSaving, setMessageSaving] = useState(false)
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [error, setError] = useState('')
   const permissionModule = module === 'support_tickets' ? 'support' : module
   const canCreate = permissions.includes('*') || permissions.includes(`${permissionModule}:create`)
   const canUpdate = permissions.includes('*') || permissions.includes(`${permissionModule}:update`)
   const canDelete = permissions.includes('*') || permissions.includes(`${permissionModule}:delete`)
   const canAssign = permissions.includes('*') || permissions.includes('support:assign')
+  const canDeleteTicket = (item: Ticket) => canDelete || Boolean(currentUserId && item.technical_responsible_id === currentUserId)
   const availableModules = modules.filter(([key]) => hasWorkspaceAccess(permissions, key === 'support_tickets' ? 'suporte' : key === 'change_requests' ? 'solicitacoes' : 'projetos'))
 
   useEffect(() => {
+    void (async () => {
+      const { data } = await createClient().auth.getUser()
+      setCurrentUserId(data.user?.id ?? null)
+    })()
     setModule(initialModule)
     setQuery('')
     setCategoryFilter('')
@@ -200,7 +213,8 @@ export function OperationsWorkspace({ initialModule = 'projects', permissions }:
       else setRequests((data ?? []) as ChangeRequest[])
     } else {
       const { data, error: queryError } = await supabase.from('support_tickets')
-        .select('id,ticket_number,subject,requester,description,status,priority,category,sector,technical_responsible_id,due_at,scheduled_at,resolution,resolved_at,created_at,updated_at')
+        .select('id,ticket_number,subject,requester,description,status,priority,category,sector,technical_responsible_id,due_at,scheduled_at,resolution,resolved_at,first_response_at,created_at,updated_at,archived_at')
+        .is('archived_at', null)
         .order('created_at', { ascending: false })
       if (queryError) setError(`Não foi possível carregar os chamados: ${queryError.message}`)
       else setTickets((data ?? []) as Ticket[])
@@ -245,7 +259,7 @@ export function OperationsWorkspace({ initialModule = 'projects', permissions }:
 
   const supportStats = useMemo(() => {
     const total = tickets.length
-    const open = tickets.filter((ticket) => ['Novo', 'Triagem', 'Aberto', 'Em atendimento', 'Aguardando cliente', 'Aguardando equipe interna', 'Agendado'].includes(normalizeSupportStatus(ticket.status))).length
+    const open = tickets.filter((ticket) => !['Resolvido', 'Fechado', 'Cancelado'].includes(normalizeSupportStatus(ticket.status))).length
     const inProgress = tickets.filter((ticket) => normalizeSupportStatus(ticket.status) === 'Em atendimento').length
     const waitingClient = tickets.filter((ticket) => normalizeSupportStatus(ticket.status) === 'Aguardando cliente').length
     const waitingTeam = tickets.filter((ticket) => normalizeSupportStatus(ticket.status) === 'Aguardando equipe interna').length
@@ -257,6 +271,10 @@ export function OperationsWorkspace({ initialModule = 'projects', permissions }:
       if (['Resolvido', 'Fechado', 'Cancelado'].includes(normalized)) return false
       return new Date(ticket.due_at).getTime() < Date.now()
     }).length
+    const responseTimes = tickets.filter((ticket) => ticket.first_response_at && ticket.created_at).map((ticket) => new Date(ticket.first_response_at!).getTime() - new Date(ticket.created_at!).getTime())
+    const resolutionTimes = tickets.filter((ticket) => ticket.resolved_at && ticket.created_at).map((ticket) => new Date(ticket.resolved_at!).getTime() - new Date(ticket.created_at!).getTime())
+    const averageFirstResponseMinutes = responseTimes.length ? Math.round(responseTimes.reduce((sum, value) => sum + value, 0) / responseTimes.length / 60000) : 0
+    const averageResolutionHours = resolutionTimes.length ? Math.round(resolutionTimes.reduce((sum, value) => sum + value, 0) / resolutionTimes.length / 3600000) : 0
     const dueSoon = tickets.filter((ticket) => {
       if (!ticket.due_at) return false
       const normalized = normalizeSupportStatus(ticket.status)
@@ -285,7 +303,7 @@ export function OperationsWorkspace({ initialModule = 'projects', permissions }:
         return accumulator
       }, {})
     ).sort((a, b) => b[1] - a[1])
-    return { total, open, inProgress, waitingClient, waitingTeam, solved, closed, overdue, dueSoon, sectors, priorities, byResponsible }
+    return { total, open, inProgress, waitingClient, waitingTeam, solved, closed, overdue, dueSoon, averageFirstResponseMinutes, averageResolutionHours, sectors, priorities, byResponsible }
   }, [tickets])
 
   const operationalRows: OperationalRecord[] = module === 'change_requests'
@@ -317,14 +335,44 @@ export function OperationsWorkspace({ initialModule = 'projects', permissions }:
     setRecord(item)
     setEditingRecord(true)
     setEditingSector('sector' in item ? item.sector : '')
+    setAttachmentFile(null)
     setError('')
+    if ('ticket_number' in item) {
+      void loadTicketMessages(item.id)
+      void loadTicketAttachments(item.id)
+    }
+  }
+
+  async function loadTicketAttachments(ticketId: string) {
+    const response = await fetch(`/api/workspace/support/attachments?ticketId=${encodeURIComponent(ticketId)}`)
+    if (!response.ok) return setTicketAttachments([])
+    const data = await response.json()
+    setTicketAttachments(Array.isArray(data) ? data : [])
+  }
+
+  async function uploadTicketAttachment() {
+    if (!record || !('ticket_number' in record) || !attachmentFile) return
+    setAttachmentSaving(true)
+    setError('')
+    const formData = new FormData()
+    formData.set('ticketId', record.id)
+    formData.set('file', attachmentFile)
+    const response = await fetch('/api/workspace/support/attachments', { method: 'POST', body: formData })
+    if (!response.ok) {
+      const body = await response.json().catch(() => null)
+      setError(body?.error ?? 'Não foi possível enviar o anexo.')
+    } else {
+      setAttachmentFile(null)
+      await loadTicketAttachments(record.id)
+    }
+    setAttachmentSaving(false)
   }
 
   async function loadTicketMessages(ticketId: string) {
     const supabase = createClient()
     const { data, error: messagesError } = await supabase
       .from('support_messages')
-      .select('id,ticket_id,message_type,content,created_at,actor_name')
+      .select('id,ticket_id,message_type,content,created_at,actor_name,author_name')
       .eq('ticket_id', ticketId)
       .order('created_at', { ascending: true })
 
@@ -335,6 +383,16 @@ export function OperationsWorkspace({ initialModule = 'projects', permissions }:
     setTicketMessages((data ?? []) as SupportMessage[])
   }
 
+  async function deleteTicketMessage(message: SupportMessage) {
+    const isAdmin = permissions.includes('*')
+    const isAuthor = Boolean(currentUserId && message.created_by === currentUserId)
+    const isResponsible = Boolean(record && 'ticket_number' in record && currentUserId && record.technical_responsible_id === currentUserId)
+    if (!(isAdmin || isAuthor || isResponsible) || !window.confirm('Excluir esta interação da linha do tempo?')) return
+    const { error: deleteError } = await createClient().from('support_messages').delete().eq('id', message.id)
+    if (deleteError) setError(`Não foi possível excluir a interação: ${deleteError.message}`)
+    else if (record) await loadTicketMessages(record.id)
+  }
+
   async function submitTicketMessage(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (!record || !('ticket_number' in record) || !messageDraft.trim()) return
@@ -343,11 +401,16 @@ export function OperationsWorkspace({ initialModule = 'projects', permissions }:
     setError('')
 
     const supabase = createClient()
+    const { data: userData } = await supabase.auth.getUser()
+    const actor = userData.user
+    const actorName = String(actor?.user_metadata?.full_name || actor?.user_metadata?.name || actor?.email || 'Equipe Codexa')
     const { error: insertError } = await supabase.from('support_messages').insert({
       ticket_id: record.id,
       message_type: messageType,
       content: messageDraft.trim(),
-      actor_name: 'Equipe Codexa',
+      actor_name: actorName,
+      author_name: actorName,
+      created_by: actor?.id ?? null,
     })
 
     if (insertError) {
@@ -361,10 +424,14 @@ export function OperationsWorkspace({ initialModule = 'projects', permissions }:
     setMessageSaving(false)
   }
 
-  async function remove(id: string) {
-    if (!canDelete || !window.confirm('Excluir este registro?')) return
+  async function remove(id: string, item?: OperationalRecord) {
+    const allowed = module === 'support_tickets' && item && 'ticket_number' in item ? canDeleteTicket(item as Ticket) : canDelete
+    if (!allowed || !window.confirm(module === 'support_tickets' ? 'Excluir este chamado e seu histórico? Esta ação não pode ser desfeita.' : 'Excluir este registro?')) return
     const table = module === 'change_requests' ? 'change_requests' : 'support_tickets'
-    const { error: deleteError } = await createClient().from(table).delete().eq('id', id)
+    const mutation = module === 'support_tickets'
+      ? createClient().from(table).delete().eq('id', id)
+      : createClient().from(table).delete().eq('id', id)
+    const { error: deleteError } = await mutation
     if (deleteError) setError(`Não foi possível excluir o registro: ${deleteError.message}`)
     else await loadData()
   }
@@ -480,6 +547,8 @@ export function OperationsWorkspace({ initialModule = 'projects', permissions }:
             { label: 'Resolvidos', value: supportStats.solved, tone: 'text-emerald-300', accent: 'bg-emerald-500/10' },
             { label: 'Fechados', value: supportStats.closed, tone: 'text-slate-200', accent: 'bg-slate-500/10' },
             { label: 'Atrasados', value: supportStats.overdue, tone: 'text-rose-300', accent: 'bg-rose-500/10' },
+            { label: '1ª resposta (min)', value: supportStats.averageFirstResponseMinutes, tone: 'text-cyan-300', accent: 'bg-cyan-500/10' },
+            { label: 'Resolução média (h)', value: supportStats.averageResolutionHours, tone: 'text-indigo-300', accent: 'bg-indigo-500/10' }
           ].map((metric) => (
             <div key={metric.label} className={`rounded-xl border border-white/[0.08] ${metric.accent} p-3`}>
               <p className="text-[10px] uppercase tracking-[0.14em] text-slate-400">{metric.label}</p>
@@ -504,7 +573,7 @@ export function OperationsWorkspace({ initialModule = 'projects', permissions }:
           </select>
           <select aria-label="Filtrar por setor" value={sectorFilter} onChange={(event) => setSectorFilter(event.target.value)} className={`${inputClass} w-auto min-w-36 py-2 text-xs`}>
             <option value="">Todos os setores</option>
-            {supportSectors.map((sector) => <option key={sector}>{sector}</option>)}
+{Array.from(new Set([...supportSectors, ...tickets.map((ticket) => ticket.sector).filter(Boolean)])).map((sector) => <option key={sector}>{sector}</option>)}
           </select>
           <select aria-label="Filtrar por status" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} className={`${inputClass} w-auto min-w-40 py-2 text-xs`}>
             <option value="">Todos os status</option>
@@ -516,7 +585,7 @@ export function OperationsWorkspace({ initialModule = 'projects', permissions }:
           </select>
           <select aria-label="Filtrar por responsável" value={responsibleFilter} onChange={(event) => setResponsibleFilter(event.target.value)} className={`${inputClass} w-auto min-w-36 py-2 text-xs`}>
             <option value="">Todos responsáveis</option>
-            {Array.from(new Set(tickets.map((ticket) => ticket.technical_responsible_id).filter((id): id is string => Boolean(id)))).map((id) => <option key={id} value={id}>{members.find((member) => member.id === id)?.full_name ?? id}</option>)}
+            {Array.from(new Set(tickets.map((ticket) => ticket.technical_responsible_id).filter((id): id is string => Boolean(id)))).map((id) => <option key={id} value={id}>{members.find((member) => member.user_id === id)?.full_name ?? id}</option>)}
           </select>
           <select aria-label="Filtrar por período" value={periodFilter} onChange={(event) => setPeriodFilter(event.target.value)} className={`${inputClass} w-auto min-w-34 py-2 text-xs`}>
             <option value="">Qualquer período</option>
@@ -595,14 +664,14 @@ export function OperationsWorkspace({ initialModule = 'projects', permissions }:
                   return (
                     <tr key={item.id} className="border-b border-white/[0.05] last:border-0">
                       <td className="px-5 py-3 font-medium text-slate-200">{'ticket_number' in item ? `${item.ticket_number} · ${item.subject}` : item.title}</td>
-                      {'ticket_number' in item && <><td className="px-5 py-3 text-slate-400">{normalizeSupportPriority(item.priority)}</td><td className="px-5 py-3 text-slate-400">{item.sector}</td><td className="px-5 py-3 text-slate-400">{members.find((member) => member.id === item.technical_responsible_id)?.full_name ?? item.technical_responsible_id ?? '—'}</td><td className="px-5 py-3 text-slate-400">{formatShortDate(item.due_at)}</td></>}
+                      {'ticket_number' in item && <><td className="px-5 py-3 text-slate-400">{normalizeSupportPriority(item.priority)}</td><td className="px-5 py-3 text-slate-400">{item.sector}</td><td className="px-5 py-3 text-slate-400">{members.find((member) => member.user_id === item.technical_responsible_id)?.full_name ?? item.technical_responsible_id ?? 'Fila de triagem'}</td><td className="px-5 py-3 text-slate-400">{formatShortDate(item.due_at)}</td></>}
                       <td className="px-5 py-3 text-slate-400">{'ticket_number' in item ? item.requester : item.requester}</td>
                       <td className="px-5 py-3 text-slate-500">{'ticket_number' in item ? normalizeSupportStatus(item.status) : item.status}</td>
                       <td className="px-5 py-3 text-right">
                         <div className="inline-flex gap-1">
                           <button onClick={() => { setRecord(item); setEditingRecord(false); setError('') }} aria-label="Ver detalhes" className="rounded p-1.5 text-slate-400 hover:bg-white/5 hover:text-white"><Eye className="size-3.5" /></button>
                           {canUpdate && <button onClick={() => openEditor(item)} aria-label="Editar registro" className="rounded p-1.5 text-slate-400 hover:bg-white/5 hover:text-white"><Pencil className="size-3.5" /></button>}
-                          {canDelete && <button onClick={() => void remove(item.id)} aria-label="Excluir registro" className="rounded p-1.5 text-slate-600 hover:bg-rose-500/10 hover:text-rose-300"><Trash2 className="size-3.5" /></button>}
+                          {(module !== 'support_tickets' ? canDelete : canDeleteTicket(item as Ticket)) && <button onClick={() => void remove(item.id, item as OperationalRecord)} aria-label="Excluir registro" className="rounded p-1.5 text-slate-600 hover:bg-rose-500/10 hover:text-rose-300"><Trash2 className="size-3.5" /></button>}
                         </div>
                       </td>
                     </tr>
@@ -614,14 +683,14 @@ export function OperationsWorkspace({ initialModule = 'projects', permissions }:
                     <td className="px-5 py-3 font-medium text-slate-200">{`${item.ticket_number} · ${item.subject}`}</td>
                     <td className="px-5 py-3 text-slate-300"><span className={`inline-flex rounded-full px-2 py-1 text-[10px] font-medium ${((supportPriorityColors as Record<string, string>)[normalizeSupportPriority(item.priority)] ?? 'bg-slate-500/10 text-slate-200')}`}>{normalizeSupportPriority(item.priority)}</span></td>
                     <td className="px-5 py-3 text-slate-400">{item.sector}</td>
-                    <td className="px-5 py-3 text-slate-400">{members.find((member) => member.id === item.technical_responsible_id)?.full_name ?? item.technical_responsible_id ?? '—'}</td>
+                    <td className="px-5 py-3 text-slate-400">{members.find((member) => member.user_id === item.technical_responsible_id)?.full_name ?? item.technical_responsible_id ?? 'Fila de triagem'}</td>
                     <td className="px-5 py-3 text-slate-400">{formatShortDate(item.due_at)}</td>
                     <td className="px-5 py-3 text-slate-300"><span className={`inline-flex rounded-full px-2 py-1 text-[10px] font-medium ${((supportStatusColors as Record<string, string>)[normalizeSupportStatus(item.status)] ?? 'bg-slate-500/10 text-slate-200')}`}>{normalizeSupportStatus(item.status)}</span></td>
                     <td className="px-5 py-3 text-right">
                       <div className="inline-flex gap-1">
                         <button onClick={() => { setRecord(item); setEditingRecord(false); setError('') }} aria-label="Ver detalhes" className="rounded p-1.5 text-slate-400 hover:bg-white/5 hover:text-white"><Eye className="size-3.5" /></button>
                         {canUpdate && <button onClick={() => openEditor(item)} aria-label="Editar registro" className="rounded p-1.5 text-slate-400 hover:bg-white/5 hover:text-white"><Pencil className="size-3.5" /></button>}
-                        {canDelete && <button onClick={() => void remove(item.id)} aria-label="Excluir registro" className="rounded p-1.5 text-slate-600 hover:bg-rose-500/10 hover:text-rose-300"><Trash2 className="size-3.5" /></button>}
+                        {(module !== 'support_tickets' ? canDelete : canDeleteTicket(item as Ticket)) && <button onClick={() => void remove(item.id, item as OperationalRecord)} aria-label="Excluir registro" className="rounded p-1.5 text-slate-600 hover:bg-rose-500/10 hover:text-rose-300"><Trash2 className="size-3.5" /></button>}
                       </div>
                     </td>
                   </tr>
@@ -666,7 +735,7 @@ export function OperationsWorkspace({ initialModule = 'projects', permissions }:
         <label className="text-xs text-slate-400">Solicitante<input name="requester" required defaultValue={record.requester} className={`${inputClass} mt-1`} /></label>
         <label className="text-xs text-slate-400">Categoria<input name="category" required defaultValue={record.category} className={`${inputClass} mt-1`} /></label>
         {'ticket_number' in record && <label className="text-xs text-slate-400">Setor responsável<select name="sector" required value={editingSector} onChange={(event) => setEditingSector(event.target.value)} className={`${inputClass} mt-1`}>{supportSectors.map((sector) => <option key={sector}>{sector}</option>)}</select></label>}
-        {'ticket_number' in record && canAssign && <label className="text-xs text-slate-400">Responsável<select name="technical_responsible_id" defaultValue={record.technical_responsible_id ?? ''} className={`${inputClass} mt-1`}><option value="">Atribuição automática do setor</option>{membersForSector(editingSector).map((member) => <option key={member.id} value={member.id}>{member.full_name}</option>)}</select></label>}
+        {'ticket_number' in record && canAssign && <label className="text-xs text-slate-400">Responsável<select name="technical_responsible_id" defaultValue={record.technical_responsible_id ?? ''} className={`${inputClass} mt-1`}><option value="">Atribuição automática do setor</option>{membersForSector(editingSector).filter((member) => member.user_id).map((member) => <option key={member.user_id} value={member.user_id!}>{member.full_name}</option>)}</select></label>}
         <label className="text-xs text-slate-400">Prioridade<select name="priority" defaultValue={normalizeSupportPriority(record.priority)} className={`${inputClass} mt-1`}>
           {supportPriorities.map((priority) => <option key={priority}>{priority}</option>)}
         </select></label>
@@ -682,7 +751,7 @@ export function OperationsWorkspace({ initialModule = 'projects', permissions }:
         <div className="flex justify-end gap-2 sm:col-span-2"><button type="button" onClick={() => setEditingRecord(false)} className="rounded-lg px-3 py-2 text-xs text-slate-300">Cancelar</button><button disabled={saving} className="rounded-lg bg-cyan-500 px-4 py-2 text-xs font-semibold text-slate-950">{saving ? 'Salvando...' : 'Salvar alterações'}</button></div>
       </form> : <><div className="grid gap-4 text-sm sm:grid-cols-2"><p className="text-slate-400">Solicitante<span className="mt-1 block text-slate-200">{record.requester}</span></p><p className="text-slate-400">Status / prioridade<span className="mt-1 block text-slate-200">{normalizeSupportStatus('ticket_number' in record ? record.status : record.status)} · {normalizeSupportPriority('ticket_number' in record ? record.priority : record.priority)}</span></p><p className="text-slate-400">Categoria<span className="mt-1 block text-slate-200">{record.category}</span></p>{'ticket_number' in record && <>
         <p className="text-slate-400">Setor responsável<span className="mt-1 block text-slate-200">{record.sector}</span></p>
-        <p className="text-slate-400">Responsável<span className="mt-1 block text-slate-200">{members.find((member) => member.id === record.technical_responsible_id)?.full_name ?? record.technical_responsible_id ?? '—'}</span></p>
+        <p className="text-slate-400">Responsável<span className="mt-1 block text-slate-200">{members.find((member) => member.user_id === record.technical_responsible_id)?.full_name ?? record.technical_responsible_id ?? 'Fila de triagem'}</span></p>
         <p className="text-slate-400">Prazo<span className="mt-1 block text-slate-200">{record.due_at ? new Date(record.due_at).toLocaleString('pt-BR') : 'Não definido'}</span></p>
         <p className="text-slate-400">Horário agendado<span className="mt-1 block text-slate-200">{record.scheduled_at ? new Date(record.scheduled_at).toLocaleString('pt-BR') : 'Não definido'}</span></p>
         <p className="text-slate-400">Resolvido em<span className="mt-1 block text-slate-200">{record.resolved_at ? new Date(record.resolved_at).toLocaleString('pt-BR') : '—'}</span></p>
@@ -693,6 +762,16 @@ export function OperationsWorkspace({ initialModule = 'projects', permissions }:
       </div>
       {'ticket_number' in record && <div className="mt-5 rounded-xl border border-white/[0.08] bg-[#0d141b] p-4">
         <div className="mb-3 flex items-center justify-between gap-3">
+          <h4 className="text-sm font-semibold text-white">Anexos</h4>
+          <span className="text-[10px] uppercase tracking-[0.12em] text-slate-500">{ticketAttachments.length} arquivo(s)</span>
+        </div>
+        <div className="space-y-2">
+          {ticketAttachments.length === 0 ? <p className="text-xs text-slate-500">Nenhum anexo neste chamado.</p> : ticketAttachments.map((attachment) => <a key={attachment.id} href={`/api/workspace/support/attachments/file?pathname=${encodeURIComponent(attachment.pathname)}`} className="flex items-center justify-between rounded-lg border border-white/[0.06] px-3 py-2 text-xs text-cyan-300 hover:bg-white/[0.04]"><span className="truncate">{attachment.filename}</span><span className="ml-3 shrink-0 text-slate-500">{Math.ceil(attachment.byte_size / 1024)} KB</span></a>)}
+        </div>
+        {canUpdate && <div className="mt-3 flex flex-wrap items-center gap-2"><input type="file" onChange={(event) => setAttachmentFile(event.target.files?.[0] ?? null)} className="max-w-full text-xs text-slate-400 file:mr-2 file:rounded-md file:border-0 file:bg-white/10 file:px-2 file:py-1 file:text-xs file:text-slate-200" /><button type="button" onClick={() => void uploadTicketAttachment()} disabled={!attachmentFile || attachmentSaving} className="rounded-lg bg-cyan-500 px-3 py-2 text-xs font-semibold text-slate-950 disabled:opacity-60">{attachmentSaving ? 'Enviando...' : 'Enviar anexo'}</button></div>}
+      </div>}
+      {'ticket_number' in record && <div className="mt-5 rounded-xl border border-white/[0.08] bg-[#0d141b] p-4">
+        <div className="mb-3 flex items-center justify-between gap-3">
           <h4 className="text-sm font-semibold text-white">Linha do tempo</h4>
           <span className="text-[10px] uppercase tracking-[0.12em] text-slate-500">{ticketMessages.length} registro(s)</span>
         </div>
@@ -701,7 +780,7 @@ export function OperationsWorkspace({ initialModule = 'projects', permissions }:
             <div key={message.id} className={`rounded-lg border p-3 ${message.message_type === 'internal' ? 'border-violet-500/20 bg-violet-500/5' : 'border-cyan-500/20 bg-cyan-500/5'}`}>
               <div className="mb-1 flex items-center justify-between gap-2 text-[10px] uppercase tracking-[0.12em] text-slate-400">
                 <span>{message.message_type === 'internal' ? 'Interno' : 'Externo'}</span>
-                <span>{new Date(message.created_at).toLocaleString('pt-BR')}</span>
+                <span className="flex items-center gap-2">{message.author_name ?? message.actor_name ?? 'Equipe Codexa'} · {new Date(message.created_at).toLocaleString('pt-BR')}{(permissions.includes('*') || message.created_by === currentUserId || ('ticket_number' in record && record.technical_responsible_id === currentUserId)) && <button type="button" onClick={() => void deleteTicketMessage(message)} aria-label="Excluir interação" className="text-rose-300/70 hover:text-rose-200"><Trash2 className="size-3" /></button>}</span>
               </div>
               <p className="text-sm text-slate-200 whitespace-pre-wrap">{message.content}</p>
             </div>
