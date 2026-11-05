@@ -125,6 +125,11 @@ export function FinanceWorkspace({ initialTab = 'overview', permissions = [] }: 
     const client = createClient()
     const { data: authData } = await client.auth.getUser()
     if (!authData.user) { setMessage('Sessão inválida para criar recorrência.'); setSaving(false); return }
+    if (recurringForm.end_date && recurringForm.end_date < recurringForm.first_due_date) {
+      setMessage('A data final deve ser igual ou posterior ao primeiro vencimento.')
+      setSaving(false)
+      return
+    }
     const firstDue = new Date(`${recurringForm.first_due_date}T12:00:00`)
     const { error } = await client.from('financial_recurring_schedules').insert({
       created_by: authData.user.id,
@@ -139,7 +144,10 @@ export function FinanceWorkspace({ initialTab = 'overview', permissions = [] }: 
       end_date: recurringForm.end_date || null,
       status: 'active',
     })
-    if (error) setMessage(`Não foi possível criar a recorrência: ${error.message}`)
+    if (error) {
+      const isDateConstraint = error.code === '23514' && error.message.includes('financial_recurring_schedules_check')
+      setMessage(isDateConstraint ? 'A data final deve ser igual ou posterior ao primeiro vencimento.' : `Não foi possível criar a recorrência: ${error.message}`)
+    }
     else { setMessage('Recorrência criada.'); setRecurringForm({ description: '', kind: 'despesa', amount: '', category: 'Operacional', frequency: 'monthly', first_due_date: '', end_date: '' }); await load() }
     setSaving(false)
   }
@@ -321,7 +329,7 @@ export function FinanceWorkspace({ initialTab = 'overview', permissions = [] }: 
 
     {showForm && <form onSubmit={(event) => void createEntry(event)} className="grid gap-3 rounded-xl border border-white/[0.08] bg-[#11161e] p-5 sm:grid-cols-[1fr_160px_170px_auto]"><input required value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} placeholder="Descrição" className={inputClass} /><input required min="0.01" step="0.01" type="number" value={form.amount} onChange={(event) => setForm({ ...form, amount: event.target.value })} placeholder="Valor" className={inputClass} /><input required type="date" value={form.due_date} onChange={(event) => setForm({ ...form, due_date: event.target.value })} className={inputClass} /><button disabled={saving} className="rounded-lg bg-emerald-500 px-4 py-2 text-xs font-semibold text-white disabled:opacity-60">{saving ? 'Salvando...' : 'Salvar'}</button></form>}
 
-    {tab === 'recurring' && canCreate && <form onSubmit={(event) => void createRecurring(event)} className="grid gap-3 rounded-xl border border-white/[0.08] bg-[#11161e] p-5 sm:grid-cols-2 lg:grid-cols-4"><input required value={recurringForm.description} onChange={(event) => setRecurringForm({ ...recurringForm, description: event.target.value })} placeholder="Descrição da recorrência" className={inputClass} /><select value={recurringForm.kind} onChange={(event) => setRecurringForm({ ...recurringForm, kind: event.target.value as 'receita' | 'despesa' })} className={inputClass}><option value="despesa">Despesa</option><option value="receita">Receita</option></select><input required min="0.01" step="0.01" type="number" value={recurringForm.amount} onChange={(event) => setRecurringForm({ ...recurringForm, amount: event.target.value })} placeholder="Valor" className={inputClass} /><input value={recurringForm.category} onChange={(event) => setRecurringForm({ ...recurringForm, category: event.target.value })} placeholder="Categoria" className={inputClass} /><select value={recurringForm.frequency} onChange={(event) => setRecurringForm({ ...recurringForm, frequency: event.target.value })} className={inputClass}><option value="monthly">Mensal</option><option value="weekly">Semanal</option><option value="yearly">Anual</option></select><input required type="date" value={recurringForm.first_due_date} onChange={(event) => setRecurringForm({ ...recurringForm, first_due_date: event.target.value })} className={inputClass} aria-label="Primeiro vencimento" /><input type="date" value={recurringForm.end_date} onChange={(event) => setRecurringForm({ ...recurringForm, end_date: event.target.value })} className={inputClass} aria-label="Data final opcional" /><button disabled={saving} className="rounded-lg bg-blue-500 px-4 py-2 text-xs font-semibold text-white disabled:opacity-60 sm:col-span-2 lg:col-span-4">{saving ? 'Salvando...' : 'Cadastrar recorrência'}</button></form>}
+    {tab === 'recurring' && canCreate && <form onSubmit={(event) => void createRecurring(event)} className="grid gap-3 rounded-xl border border-white/[0.08] bg-[#11161e] p-5 sm:grid-cols-2 lg:grid-cols-4"><input required value={recurringForm.description} onChange={(event) => setRecurringForm({ ...recurringForm, description: event.target.value })} placeholder="Descrição da recorrência" className={inputClass} /><select value={recurringForm.kind} onChange={(event) => setRecurringForm({ ...recurringForm, kind: event.target.value as 'receita' | 'despesa' })} className={inputClass}><option value="despesa">Despesa</option><option value="receita">Receita</option></select><input required min="0.01" step="0.01" type="number" value={recurringForm.amount} onChange={(event) => setRecurringForm({ ...recurringForm, amount: event.target.value })} placeholder="Valor" className={inputClass} /><input value={recurringForm.category} onChange={(event) => setRecurringForm({ ...recurringForm, category: event.target.value })} placeholder="Categoria" className={inputClass} /><select value={recurringForm.frequency} onChange={(event) => setRecurringForm({ ...recurringForm, frequency: event.target.value })} className={inputClass}><option value="monthly">Mensal</option><option value="weekly">Semanal</option><option value="yearly">Anual</option></select><input required type="date" value={recurringForm.first_due_date} onChange={(event) => setRecurringForm({ ...recurringForm, first_due_date: event.target.value })} className={inputClass} aria-label="Primeiro vencimento" /><input type="date" min={recurringForm.first_due_date || undefined} value={recurringForm.end_date} onChange={(event) => setRecurringForm({ ...recurringForm, end_date: event.target.value })} className={inputClass} aria-label="Data final opcional" /><button disabled={saving} className="rounded-lg bg-blue-500 px-4 py-2 text-xs font-semibold text-white disabled:opacity-60 sm:col-span-2 lg:col-span-4">{saving ? 'Salvando...' : 'Cadastrar recorrência'}</button></form>}
 
     {tab === 'overview' && (
       <>
@@ -498,7 +506,7 @@ export function FinanceWorkspace({ initialTab = 'overview', permissions = [] }: 
         <h2 className="text-sm font-semibold text-slate-200">Sugestão de operação</h2>
         <div className="mt-4 space-y-3">
           <div className="rounded-lg border border-white/[0.06] bg-white/[0.02] p-3">
-            <p className="text-[10px] uppercase tracking-[0.14em] text-slate-500">Cobrança prevista</p>
+            <p className="text-[10px] uppercase tracking-[0.14em] text-slate-500">Cobran��a prevista</p>
             <p className="mt-2 text-lg font-semibold text-white">{money(recurringSchedules.filter((item) => item.kind === 'receita').reduce((sum, item) => sum + Number(item.amount || 0), 0))}</p>
           </div>
           <div className="rounded-lg border border-white/[0.06] bg-white/[0.02] p-3">
