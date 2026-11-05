@@ -198,6 +198,10 @@
 [data-font='merriweather'] body { font-family: Merriweather, Georgia, serif; }
 [data-font='playfair-display'] body { font-family: 'Playfair Display', Georgia, serif; }
 [data-font='ibm-plex-mono'] body { font-family: 'IBM Plex Mono', ui-monospace, SFMono-Regular, monospace; }
+html[data-font] .font-sans { font-family: inherit; }
+html[data-font] .font-serif { font-family: inherit; }
+html[data-font] .font-mono { font-family: 'IBM Plex Mono', ui-monospace, SFMono-Regular, monospace; }
+html[data-font] button[class~='bg-white'], html[data-font] button[class*='bg-white/'] { font-family: inherit; }
 [data-radius='small'] { --radius: 0.45rem; }
 [data-radius='large'] { --radius: 1rem; }
 [data-contrast='high'] { --foreground: #ffffff; --muted-foreground: #d2d9e8; --border: #536078; --input: #64708a; }
@@ -260,7 +264,8 @@ button, [role='button'] { border-radius: var(--button-radius, 0.65rem); }
   border-radius: var(--button-radius, 0.65rem);
 }
 .field:focus { border-color: var(--focus-color, var(--ring)); box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus-color, var(--ring)) 25%, transparent); }
-.workspace-shell button[class*='bg-[var(--primary)]'], .workspace-shell button.bg-primary { background-color: var(--button-primary-bg) !important; color: var(--button-primary-text) !important; }
+.workspace-shell button[class*='bg-[var(--primary)]'], .workspace-shell button.bg-primary, .workspace-shell button[class~='bg-white'], .workspace-shell button[class~='bg-violet-500'] { background-color: var(--button-primary-bg) !important; color: var(--button-primary-text) !important; }
+.workspace-shell button[class~='bg-white']:hover, .workspace-shell button[class~='bg-violet-500']:hover { background-color: var(--button-primary-hover) !important; }
 .workspace-shell button[class*='bg-[var(--primary)]']:hover, .workspace-shell button.bg-primary:hover { background-color: var(--button-primary-hover) !important; }
 .workspace-shell button:disabled { background-color: var(--button-disabled-bg) !important; color: var(--button-disabled-text) !important; }
 .workspace-shell a { color: var(--text-link); }
