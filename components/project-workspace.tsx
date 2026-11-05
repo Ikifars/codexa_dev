@@ -35,6 +35,7 @@ type ProjectTask = {
   responsible_id: string | null
   created_at: string
   updated_at: string
+  sort_order: number
   participants?: string[] | null
 }
 
@@ -139,7 +140,7 @@ export function ProjectWorkspace({ projectId, permissions }: { projectId: string
     const { data: authData } = await supabase.auth.getUser()
     const [projectResult, taskResult, memberResult, clientResult, activityResult, accessResult] = await Promise.all([
       supabase.from('projects').select('id,name,description,status,priority,due_date,completed_at,created_at,client_id,responsible_id,client:clients(id,legal_name,trade_name)').eq('id', projectId).maybeSingle(),
-      supabase.from('project_tasks').select('id,project_id,title,description,status,priority,due_date,responsible_id,participants,created_at,updated_at').eq('project_id', projectId).order('created_at', { ascending: true }),
+      supabase.from('project_tasks').select('id,project_id,title,description,status,priority,due_date,responsible_id,participants,created_at,updated_at,sort_order').eq('project_id', projectId).order('sort_order', { ascending: true }).order('created_at', { ascending: true }),
       supabase.from('team_members').select('id,user_id,full_name,email,status').order('full_name'),
       supabase.from('clients').select('id,legal_name,trade_name').order('legal_name'),
       supabase.from('project_activity').select('id,project_id,task_id,actor_id,event_type,summary,metadata,created_at').eq('project_id', projectId).order('created_at', { ascending: false }).limit(100),
