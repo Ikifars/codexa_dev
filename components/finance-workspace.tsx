@@ -29,6 +29,7 @@ type Payable = {
 }
 
 type FinanceRecord = Receivable | Payable
+type RecurringSchedule = { id: string; description: string; kind: 'receita' | 'despesa'; amount: number; category: string; beneficiary: string | null; frequency: string; anchor_day: number; first_due_date: string; end_date: string | null; status: 'active' | 'paused' | 'ended'; next_due_date: string; last_generated_date: string | null }
 
 type RangeOption = '30d' | '90d' | 'all'
 type FinanceTab = 'overview' | 'receivable' | 'payable' | 'recurring' | 'cashflow' | 'budget'
@@ -62,17 +63,19 @@ export function FinanceWorkspace({ initialTab = 'overview', permissions = [] }: 
   const [tab, setTab] = useState<FinanceTab>(initialTab)
   const [receivables, setReceivables] = useState<Receivable[]>([])
   const [payables, setPayables] = useState<Payable[]>([])
+  const [recurringSchedules, setRecurringSchedules] = useState<RecurringSchedule[]>([])
   const [query, setQuery] = useState('')
   const [page, setPage] = useState(0)
   const [rangeFilter, setRangeFilter] = useState<RangeOption>('30d')
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [form, setForm] = useState({ description: '', amount: '', due_date: '' })
+  const [recurringForm, setRecurringForm] = useState({ description: '', kind: 'despesa' as 'receita' | 'despesa', amount: '', category: 'Operacional', frequency: 'monthly', first_due_date: '', end_date: '' })
   const [message, setMessage] = useState('')
   const [record, setRecord] = useState<FinanceRecord | null>(null)
   const [editingRecord, setEditingRecord] = useState(false)
   const [saving, setSaving] = useState(false)
-  const permissionModule = tab === 'payable' ? 'accounts_payable' : 'accounts_receivable'
+  const permissionModule = tab === 'payable' ? 'accounts_payable' : tab === 'recurring' ? 'finance' : 'accounts_receivable'
   const canCreate = permissions.includes('*') || permissions.includes(`${permissionModule}:create`)
   const canUpdate = permissions.includes('*') || permissions.includes(`${permissionModule}:update`)
   const canDelete = permissions.includes('*') || permissions.includes(`${permissionModule}:delete`)
@@ -80,20 +83,23 @@ export function FinanceWorkspace({ initialTab = 'overview', permissions = [] }: 
   async function load() {
     setLoading(true)
     const supabase = createClient()
-    const [receivableResult, payableResult] = await Promise.all([
-      supabase.from('accounts_receivable').select('id,description,category,original_amount,final_amount,paid_amount,due_date,status,created_at').order('due_date'),
-      supabase.from('accounts_payable').select('id,beneficiary,description,amount,paid_amount,due_date,status,created_at').order('due_date'),
+    const [receivableResult, payableResult, recurringResult] = await Promise.all([
+      supabase.from('accounts_receivable').select('id,description,category,original_amount,final_amount,paid_amount,due_date,status,created_at,recurring_schedule_id,recurring_cycle_key').order('due_date'),
+      supabase.from('accounts_payable').select('id,beneficiary,description,amount,paid_amount,due_date,status,created_at,recurring_schedule_id,recurring_cycle_key').order('due_date'),
+      supabase.from('financial_recurring_schedules').select('id,description,kind,amount,category,beneficiary,frequency,anchor_day,first_due_date,end_date,status,next_due_date,last_generated_date').order('next_due_date'),
     ])
-    if (receivableResult.error || payableResult.error) {
-      const loadError = receivableResult.error || payableResult.error
+    if (receivableResult.error || payableResult.error || recurringResult.error) {
+      const loadError = receivableResult.error || payableResult.error || recurringResult.error
       setMessage(`Não foi possível carregar lançamentos: ${loadError.message}`)
     }
     setReceivables((receivableResult.data ?? []) as Receivable[])
     setPayables((payableResult.data ?? []) as Payable[])
+    setRecurringSchedules((recurringResult.data ?? []) as RecurringSchedule[])
     setLoading(false)
   }
 
   useEffect(() => { void load() }, [])
+  useEffect(() => { if (tab === 'recurring') void createClient().rpc('generate_financial_recurring_cycles', { p_until: new Date(Date.now() + 90 * 86400000).toISOString().slice(0, 10) }).then(() => void load()) }, [tab])
 
   async function createEntry(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -109,6 +115,32 @@ export function FinanceWorkspace({ initialTab = 'overview', permissions = [] }: 
     const { error: insertError } = await supabase.from(table).insert(payload)
     if (insertError) setMessage(`Não foi possível salvar o lançamento: ${insertError.message}`)
     else { setMessage('Lançamento criado.'); setShowForm(false); setForm({ description: '', amount: '', due_date: '' }); await load() }
+    setSaving(false)
+  }
+
+  async function createRecurring(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!canCreate || !recurringForm.description || !recurringForm.amount || !recurringForm.first_due_date) return
+    setSaving(true)
+    const client = createClient()
+    const { data: authData } = await client.auth.getUser()
+    if (!authData.user) { setMessage('Sessão inválida para criar recorrência.'); setSaving(false); return }
+    const firstDue = new Date(`${recurringForm.first_due_date}T12:00:00`)
+    const { error } = await client.from('financial_recurring_schedules').insert({
+      created_by: authData.user.id,
+      description: recurringForm.description.trim(),
+      kind: recurringForm.kind,
+      amount: Number(recurringForm.amount),
+      category: recurringForm.category.trim() || 'Operacional',
+      frequency: recurringForm.frequency,
+      anchor_day: firstDue.getDate(),
+      first_due_date: recurringForm.first_due_date,
+      next_due_date: recurringForm.first_due_date,
+      end_date: recurringForm.end_date || null,
+      status: 'active',
+    })
+    if (error) setMessage(`Não foi possível criar a recorrência: ${error.message}`)
+    else { setMessage('Recorrência criada.'); setRecurringForm({ description: '', kind: 'despesa', amount: '', category: 'Operacional', frequency: 'monthly', first_due_date: '', end_date: '' }); await load() }
     setSaving(false)
   }
 
@@ -223,59 +255,7 @@ export function FinanceWorkspace({ initialTab = 'overview', permissions = [] }: 
   const totalOutflow = cashflowSeries.reduce((sum, item) => sum + item.outflow, 0)
   const netCashflow = totalInflow - totalOutflow
 
-  const recurringSchedules = useMemo(() => {
-    const grouped = new Map<string, {
-      key: string
-      label: string
-      type: 'receita' | 'despesa'
-      totalOpen: number
-      occurrences: number
-      nextDue: string | null
-      lastDue: string | null
-    }>()
-
-    const registerItem = (item: Receivable | Payable, type: 'receita' | 'despesa') => {
-      const title = 'beneficiary' in item ? item.beneficiary || item.description : item.description || item.category || 'Lançamento'
-      const key = `${type}:${title.trim().toLowerCase()}`
-      const existing = grouped.get(key) ?? {
-        key,
-        label: title,
-        type,
-        totalOpen: 0,
-        occurrences: 0,
-        nextDue: null,
-        lastDue: null,
-      }
-
-      existing.totalOpen += getOpenBalance(item)
-      existing.occurrences += 1
-
-      if (item.due_date) {
-        const due = item.due_date.slice(0, 10)
-        if (!existing.nextDue || new Date(`${due}T12:00:00`).getTime() < new Date(`${existing.nextDue}T12:00:00`).getTime()) {
-          existing.nextDue = due
-        }
-        if (!existing.lastDue || new Date(`${due}T12:00:00`).getTime() > new Date(`${existing.lastDue}T12:00:00`).getTime()) {
-          existing.lastDue = due
-        }
-      }
-
-      grouped.set(key, existing)
-    }
-
-    receivables.forEach((item) => registerItem(item, 'receita'))
-    payables.forEach((item) => registerItem(item, 'despesa'))
-
-    return Array.from(grouped.values())
-      .filter((item) => item.occurrences > 1)
-      .sort((a, b) => {
-        const first = a.nextDue ? new Date(`${a.nextDue}T12:00:00`).getTime() : Number.MAX_SAFE_INTEGER
-        const second = b.nextDue ? new Date(`${b.nextDue}T12:00:00`).getTime() : Number.MAX_SAFE_INTEGER
-        return first - second
-      })
-  }, [receivables, payables])
-
-  const recurringTotal = recurringSchedules.reduce((sum, item) => sum + item.totalOpen, 0)
+  const recurringTotal = recurringSchedules.filter((item) => item.status === 'active').reduce((sum, item) => sum + Number(item.amount || 0), 0)
 
   const budgetLines = useMemo(() => {
     const lines = [...topCategories.map(([label, value]) => ({
@@ -340,6 +320,8 @@ export function FinanceWorkspace({ initialTab = 'overview', permissions = [] }: 
     {message && <p role="status" className="rounded-lg border border-blue-500/20 bg-blue-500/10 px-4 py-3 text-xs text-blue-300">{message}</p>}
 
     {showForm && <form onSubmit={(event) => void createEntry(event)} className="grid gap-3 rounded-xl border border-white/[0.08] bg-[#11161e] p-5 sm:grid-cols-[1fr_160px_170px_auto]"><input required value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} placeholder="Descrição" className={inputClass} /><input required min="0.01" step="0.01" type="number" value={form.amount} onChange={(event) => setForm({ ...form, amount: event.target.value })} placeholder="Valor" className={inputClass} /><input required type="date" value={form.due_date} onChange={(event) => setForm({ ...form, due_date: event.target.value })} className={inputClass} /><button disabled={saving} className="rounded-lg bg-emerald-500 px-4 py-2 text-xs font-semibold text-white disabled:opacity-60">{saving ? 'Salvando...' : 'Salvar'}</button></form>}
+
+    {tab === 'recurring' && canCreate && <form onSubmit={(event) => void createRecurring(event)} className="grid gap-3 rounded-xl border border-white/[0.08] bg-[#11161e] p-5 sm:grid-cols-2 lg:grid-cols-4"><input required value={recurringForm.description} onChange={(event) => setRecurringForm({ ...recurringForm, description: event.target.value })} placeholder="Descrição da recorrência" className={inputClass} /><select value={recurringForm.kind} onChange={(event) => setRecurringForm({ ...recurringForm, kind: event.target.value as 'receita' | 'despesa' })} className={inputClass}><option value="despesa">Despesa</option><option value="receita">Receita</option></select><input required min="0.01" step="0.01" type="number" value={recurringForm.amount} onChange={(event) => setRecurringForm({ ...recurringForm, amount: event.target.value })} placeholder="Valor" className={inputClass} /><input value={recurringForm.category} onChange={(event) => setRecurringForm({ ...recurringForm, category: event.target.value })} placeholder="Categoria" className={inputClass} /><select value={recurringForm.frequency} onChange={(event) => setRecurringForm({ ...recurringForm, frequency: event.target.value })} className={inputClass}><option value="monthly">Mensal</option><option value="weekly">Semanal</option><option value="yearly">Anual</option></select><input required type="date" value={recurringForm.first_due_date} onChange={(event) => setRecurringForm({ ...recurringForm, first_due_date: event.target.value })} className={inputClass} aria-label="Primeiro vencimento" /><input type="date" value={recurringForm.end_date} onChange={(event) => setRecurringForm({ ...recurringForm, end_date: event.target.value })} className={inputClass} aria-label="Data final opcional" /><button disabled={saving} className="rounded-lg bg-blue-500 px-4 py-2 text-xs font-semibold text-white disabled:opacity-60 sm:col-span-2 lg:col-span-4">{saving ? 'Salvando...' : 'Cadastrar recorrência'}</button></form>}
 
     {tab === 'overview' && (
       <>
@@ -486,27 +468,27 @@ export function FinanceWorkspace({ initialTab = 'overview', permissions = [] }: 
 
         <div className="mt-5 space-y-3">
           {recurringSchedules.length === 0 ? (
-            <p className="text-xs text-slate-500">Nenhuma recorrência detectada com base nos lançamentos atuais.</p>
+            <p className="text-xs text-slate-500">Nenhuma recorrência cadastrada.</p>
           ) : recurringSchedules.map((item) => (
-            <div key={item.key} className="rounded-lg border border-white/[0.06] bg-white/[0.02] p-3">
+            <div key={item.id} className="rounded-lg border border-white/[0.06] bg-white/[0.02] p-3">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <p className="text-sm font-medium text-white">{item.label}</p>
-                  <p className="mt-1 text-[11px] text-slate-500">{item.type === 'receita' ? 'Receita recorrente' : 'Despesa recorrente'} · {item.occurrences} ocorrências</p>
+                  <p className="text-sm font-medium text-white">{item.description}</p>
+                  <p className="mt-1 text-[11px] text-slate-500">{item.kind === 'receita' ? 'Receita recorrente' : 'Despesa recorrente'} · {item.frequency === 'monthly' ? 'Mensal' : item.frequency === 'weekly' ? 'Semanal' : 'Anual'}</p>
                 </div>
-                <span className={`rounded-full px-2 py-1 text-[10px] font-medium ${item.type === 'receita' ? 'bg-emerald-500/10 text-emerald-300' : 'bg-rose-500/10 text-rose-300'}`}>
-                  {item.type === 'receita' ? 'Entrada' : 'Saída'}
+                <span className={`rounded-full px-2 py-1 text-[10px] font-medium ${item.kind === 'receita' ? 'bg-emerald-500/10 text-emerald-300' : 'bg-rose-500/10 text-rose-300'}`}>
+                  {item.status === 'active' ? 'Ativa' : item.status === 'paused' ? 'Pausada' : 'Encerrada'}
                 </span>
               </div>
               <div className="mt-3 flex items-center justify-between text-[11px] text-slate-400">
                 <span>Próximo vencimento</span>
-                <span>{item.nextDue ? new Date(`${item.nextDue}T12:00:00`).toLocaleDateString('pt-BR') : 'N/A'}</span>
+                <span>{item.next_due_date ? new Date(`${item.next_due_date}T12:00:00`).toLocaleDateString('pt-BR') : 'N/A'}</span>
               </div>
               <div className="mt-2 flex items-center justify-between text-[11px] text-slate-400">
-                <span>Último vencimento</span>
-                <span>{item.lastDue ? new Date(`${item.lastDue}T12:00:00`).toLocaleDateString('pt-BR') : 'N/A'}</span>
+                <span>Último lançamento</span>
+                <span>{item.last_generated_date ? new Date(`${item.last_generated_date}T12:00:00`).toLocaleDateString('pt-BR') : 'Ainda não gerado'}</span>
               </div>
-              <p className="mt-3 text-sm font-semibold text-white">{money(item.totalOpen)}</p>
+              <p className="mt-3 text-sm font-semibold text-white">{money(item.amount)}</p>
             </div>
           ))}
         </div>
@@ -517,15 +499,15 @@ export function FinanceWorkspace({ initialTab = 'overview', permissions = [] }: 
         <div className="mt-4 space-y-3">
           <div className="rounded-lg border border-white/[0.06] bg-white/[0.02] p-3">
             <p className="text-[10px] uppercase tracking-[0.14em] text-slate-500">Cobrança prevista</p>
-            <p className="mt-2 text-lg font-semibold text-white">{money(recurringSchedules.filter((item) => item.type === 'receita').reduce((sum, item) => sum + item.totalOpen, 0))}</p>
+            <p className="mt-2 text-lg font-semibold text-white">{money(recurringSchedules.filter((item) => item.kind === 'receita').reduce((sum, item) => sum + Number(item.amount || 0), 0))}</p>
           </div>
           <div className="rounded-lg border border-white/[0.06] bg-white/[0.02] p-3">
             <p className="text-[10px] uppercase tracking-[0.14em] text-slate-500">Despesas recorrentes</p>
-            <p className="mt-2 text-lg font-semibold text-white">{money(recurringSchedules.filter((item) => item.type === 'despesa').reduce((sum, item) => sum + item.totalOpen, 0))}</p>
+            <p className="mt-2 text-lg font-semibold text-white">{money(recurringSchedules.filter((item) => item.kind === 'despesa').reduce((sum, item) => sum + Number(item.amount || 0), 0))}</p>
           </div>
           <div className="rounded-lg border border-white/[0.06] bg-white/[0.02] p-3">
             <p className="text-[10px] uppercase tracking-[0.14em] text-slate-500">Saldo recorrente</p>
-            <p className="mt-2 text-lg font-semibold text-white">{money(recurringSchedules.filter((item) => item.type === 'receita').reduce((sum, item) => sum + item.totalOpen, 0) - recurringSchedules.filter((item) => item.type === 'despesa').reduce((sum, item) => sum + item.totalOpen, 0))}</p>
+            <p className="mt-2 text-lg font-semibold text-white">{money(recurringSchedules.filter((item) => item.kind === 'receita').reduce((sum, item) => sum + Number(item.amount || 0), 0) - recurringSchedules.filter((item) => item.kind === 'despesa').reduce((sum, item) => sum + Number(item.amount || 0), 0))}</p>
           </div>
         </div>
       </div>

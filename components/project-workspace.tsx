@@ -39,7 +39,7 @@ type ProjectTask = {
   participants?: string[] | null
 }
 
-type TeamMember = { id: string; user_id: string | null; full_name: string; email: string; status: string }
+type TeamMember = { id: string; user_id: string | null; full_name: string; email: string; status: string; avatar_url?: string | null }
 type Client = { id: string; legal_name: string; trade_name: string | null }
 type TaskComment = { id: string; task_id: string; author_id: string; body: string; created_at: string; updated_at: string }
 type ProjectActivity = { id: string; project_id: string; task_id: string | null; actor_id: string | null; event_type: string; summary: string; metadata: Record<string, unknown>; created_at: string }
@@ -102,6 +102,7 @@ export function ProjectWorkspace({ projectId, permissions }: { projectId: string
   const [projectAccessLevel, setProjectAccessLevel] = useState<'viewer' | 'collaborator' | 'manager' | null>(null)
   const [tasks, setTasks] = useState<ProjectTask[]>([])
   const [members, setMembers] = useState<TeamMember[]>([])
+  const [memberQuery, setMemberQuery] = useState('')
   const [clients, setClients] = useState<Client[]>([])
   const [taskIndicators, setTaskIndicators] = useState<Record<string, { comments: number; attachments: number }>>({})
   const [activity, setActivity] = useState<ProjectActivity[]>([])
@@ -141,7 +142,9 @@ export function ProjectWorkspace({ projectId, permissions }: { projectId: string
     const [projectResult, taskResult, memberResult, clientResult, activityResult, accessResult] = await Promise.all([
       supabase.from('projects').select('id,name,description,status,priority,due_date,completed_at,created_at,client_id,responsible_id,client:clients(id,legal_name,trade_name)').eq('id', projectId).maybeSingle(),
       supabase.from('project_tasks').select('id,project_id,title,description,status,priority,due_date,responsible_id,participants,created_at,updated_at,sort_order').eq('project_id', projectId).order('sort_order', { ascending: true }).order('created_at', { ascending: true }),
-      supabase.from('team_members').select('id,user_id,full_name,email,status').order('full_name'),
+      canAssign
+        ? supabase.rpc('list_project_assignable_members', { p_project_id: projectId })
+        : supabase.from('team_members').select('id,user_id,full_name,email,status').order('full_name'),
       supabase.from('clients').select('id,legal_name,trade_name').order('legal_name'),
       supabase.from('project_activity').select('id,project_id,task_id,actor_id,event_type,summary,metadata,created_at').eq('project_id', projectId).order('created_at', { ascending: false }).limit(100),
       supabase.rpc('project_access_level', { p_project_id: projectId }),
@@ -206,6 +209,8 @@ export function ProjectWorkspace({ projectId, permissions }: { projectId: string
     })
     return result
   }, [members])
+
+  const assignableMembers = useMemo(() => members.filter((member) => normalize(`${member.full_name} ${member.email}`).includes(normalize(memberQuery))), [memberQuery, members])
 
   const validTasks = useMemo(() => {
     const uniqueTasks = new Map(tasks.map((task) => [task.id, task]))
@@ -540,7 +545,7 @@ export function ProjectWorkspace({ projectId, permissions }: { projectId: string
       {(tab === 'kanban' || tab === 'tasks') && <section className="space-y-4">
         <div className="flex flex-col gap-3 rounded-xl border border-white/[0.07] bg-[#11161e] p-4 lg:flex-row lg:items-center">
           <p className="mr-auto text-sm font-medium text-slate-300">{tab === 'kanban' ? 'Quadro de execução' : 'Lista detalhada de tarefas'}</p>
-          <label className="field flex items-center gap-2 lg:w-52"><Search className="size-3.5 text-slate-500" /><input value={taskQuery} onChange={(event) => setTaskQuery(event.target.value)} placeholder="Buscar tasks" className="min-w-0 flex-1 bg-transparent outline-none" aria-label="Buscar tasks" /></label>          <label className="field flex items-center gap-2"><span className="text-xs text-slate-500">Criada em</span><input type="date" value={taskDate} onChange={(event) => setTaskDate(event.target.value)} className="min-w-0 bg-transparent text-slate-200 outline-none" aria-label="Filtrar tarefas por data de criação" /></label><select value={taskFilter.responsible} onChange={(event) => setTaskFilter((current) => ({ ...current, responsible: event.target.value }))} className="field lg:w-52" aria-label="Filtrar tarefas por responsável"><option value="">Todos os responsáveis</option>{members.map((member) => <option key={member.user_id || member.id} value={member.user_id || member.id}>{member.full_name}</option>)}</select>
+          <label className="field flex items-center gap-2 lg:w-52"><Search className="size-3.5 text-slate-500" /><input value={taskQuery} onChange={(event) => setTaskQuery(event.target.value)} placeholder="Buscar tasks" className="min-w-0 flex-1 bg-transparent outline-none" aria-label="Buscar tasks" /></label>          <label className="field flex items-center gap-2"><span className="text-xs text-slate-500">Criada em</span><input type="date" value={taskDate} onChange={(event) => setTaskDate(event.target.value)} className="min-w-0 bg-transparent text-slate-200 outline-none" aria-label="Filtrar tarefas por data de criação" /></label><select value={taskFilter.responsible} onChange={(event) => setTaskFilter((current) => ({ ...current, responsible: event.target.value }))} className="field lg:w-52" aria-label="Filtrar tarefas por responsável"><option value="">Todos os responsáveis</option>{assignableMembers.map((member) => <option key={member.user_id || member.id} value={member.user_id || member.id}>{member.full_name}</option>)}</select>
           <select value={taskFilter.priority} onChange={(event) => setTaskFilter((current) => ({ ...current, priority: event.target.value }))} className="field lg:w-44" aria-label="Filtrar tarefas por prioridade"><option value="">Todas as prioridades</option>{taskPriorityOptions.map((priority) => <option key={priority}>{priority}</option>)}</select>
           <select value={taskFilter.deadline} onChange={(event) => setTaskFilter((current) => ({ ...current, deadline: event.target.value }))} className="field lg:w-44" aria-label="Filtrar tarefas por prazo"><option value="">Todos os prazos</option><option value="overdue">Atrasadas</option><option value="has-date">Com prazo</option><option value="no-date">Sem prazo</option></select>
         </div>
@@ -600,7 +605,7 @@ export function ProjectWorkspace({ projectId, permissions }: { projectId: string
             <label className="grid gap-1.5 text-sm text-slate-300">Status<select name="status" defaultValue={project.status} className="field">{[...new Set([project.status, 'Backlog', 'Em andamento', 'Concluído', 'Arquivado'])].map((status) => <option key={status}>{status}</option>)}</select></label>
             <label className="grid gap-1.5 text-sm text-slate-300">Prioridade<select name="priority" defaultValue={project.priority} className="field">{[...new Set([project.priority, 'Baixa', 'Média', 'Alta', 'Urgente'])].map((value) => <option key={value}>{value}</option>)}</select></label>
             {canAssign && <label className="grid gap-1.5 text-sm text-slate-300">Cliente<select name="client_id" defaultValue={project.client_id ?? ''} className="field"><option value="">Sem cliente</option>{clients.map((client) => <option key={client.id} value={client.id}>{client.trade_name || client.legal_name}</option>)}</select></label>}
-            {canAssign && <label className="grid gap-1.5 text-sm text-slate-300">Responsável<select name="responsible_id" defaultValue={project.responsible_id ?? ''} className="field"><option value="">Sem responsável</option>{members.map((member) => <option key={member.user_id || member.id} value={member.user_id || member.id}>{member.full_name}</option>)}</select></label>}
+            {canAssign && <label className="grid gap-1.5 text-sm text-slate-300">Responsável<input value={memberQuery} onChange={(event) => setMemberQuery(event.target.value)} placeholder="Pesquisar funcionário" className="field" aria-label="Pesquisar funcionário" /><select name="responsible_id" defaultValue={project.responsible_id ?? ''} className="field"><option value="">Sem responsável</option>{assignableMembers.map((member) => <option key={member.user_id || member.id} value={member.user_id || member.id}>{member.full_name}</option>)}</select></label>}
             <label className="grid gap-1.5 text-sm text-slate-300">Prazo<input type="date" name="due_date" defaultValue={project.due_date ?? ''} className="field" /></label>
             <div className="mt-2 flex justify-end gap-2 sm:col-span-2"><button type="button" onClick={() => setEditProjectOpen(false)} className="min-h-10 rounded-lg px-4 text-sm text-slate-400 hover:bg-white/5">Cancelar</button><button disabled={taskSaving} className="flex min-h-10 items-center gap-2 rounded-lg bg-blue-500 px-4 text-sm font-semibold text-white hover:bg-blue-400 disabled:opacity-60"><Save className="size-4" />Salvar</button></div>
           </form>
@@ -618,7 +623,7 @@ export function ProjectWorkspace({ projectId, permissions }: { projectId: string
                 <div className="grid gap-3 sm:grid-cols-2">
                   <label className="grid gap-1.5 text-sm text-slate-300">Status<select name="status" defaultValue={taskModal.task ? boardStatus(taskModal.task.status) : taskModal.status} className="field">{columns.map((column) => <option key={column.status}>{column.status}</option>)}{extraStatuses.map((status) => <option key={status}>{status}</option>)}{taskModal.task && isCanceled(taskModal.task.status) && <option>Cancelado</option>}</select></label>
                   <label className="grid gap-1.5 text-sm text-slate-300">Prioridade<select name="priority" defaultValue={taskModal.task?.priority ?? 'Média'} className="field">{[...new Set([taskModal.task?.priority, 'Baixa', 'Média', 'Alta', 'Urgente'].filter((value): value is string => Boolean(value)))].map((priority) => <option key={priority}>{priority}</option>)}</select></label>
-                  {canAssign && <label className="grid gap-1.5 text-sm text-slate-300">Responsável<select name="responsible_id" defaultValue={taskModal.task?.responsible_id ?? ''} className="field"><option value="">Sem responsável</option>{members.map((member) => <option key={member.user_id || member.id} value={member.user_id || member.id}>{member.full_name}</option>)}</select></label>}
+                  {canAssign && <label className="grid gap-1.5 text-sm text-slate-300">Responsável<input value={memberQuery} onChange={(event) => setMemberQuery(event.target.value)} placeholder="Pesquisar funcionário" className="field" aria-label="Pesquisar funcionário" /><select name="responsible_id" defaultValue={taskModal.task?.responsible_id ?? ''} className="field"><option value="">Sem responsável</option>{assignableMembers.map((member) => <option key={member.user_id || member.id} value={member.user_id || member.id}>{member.full_name}</option>)}</select></label>}
                   <label className="grid gap-1.5 text-sm text-slate-300">Prazo<input type="date" name="due_date" defaultValue={taskModal.task?.due_date ?? ''} className="field" /></label>
                 </div>
               </fieldset>
