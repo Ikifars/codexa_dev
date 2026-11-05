@@ -224,9 +224,26 @@
   }
 }
 
+.appearance-accordion { overflow: hidden; border: 1px solid color-mix(in srgb, var(--workspace-border, var(--border)) 80%, transparent); border-radius: var(--card-radius, 0.75rem); background: color-mix(in srgb, var(--workspace-surface, var(--card)) 94%, transparent); }
+.appearance-accordion > summary { display: flex; align-items: center; justify-content: space-between; gap: 1rem; cursor: pointer; list-style: none; padding: 1rem 1.25rem; color: var(--workspace-text, var(--foreground)); }
+.appearance-accordion > summary::-webkit-details-marker { display: none; }
+.appearance-accordion > summary > span:first-child { display: flex; align-items: center; gap: 0.7rem; color: var(--primary); }
+.appearance-accordion summary strong, .appearance-accordion summary small { display: block; }
+.appearance-accordion summary strong { color: var(--workspace-text, var(--foreground)); font-size: 0.875rem; }
+.appearance-accordion summary small { color: var(--workspace-muted, var(--muted-foreground)); font-size: 0.72rem; margin-top: 0.2rem; }
+.accordion-chevron { color: var(--workspace-muted, var(--muted-foreground)); transition: transform 180ms ease; }
+.appearance-accordion[open] .accordion-chevron { transform: rotate(180deg); }
+.accordion-content { padding: 0 0.25rem 0.25rem; }
+body { font-size: var(--font-size-base, 16px); font-weight: var(--font-weight-base, 400); line-height: var(--line-height-base, 1.5); letter-spacing: var(--letter-spacing-base, 0); }
+button, [role='button'] { border-radius: var(--button-radius, 0.65rem); }
+.workspace-shell [class*='rounded-xl'], .workspace-shell [class*='rounded-2xl'], .workspace-shell [class*='rounded-3xl'] { border-radius: var(--card-radius, 0.75rem); }
+.workspace-shell [class*='shadow-'] { --tw-shadow-color: color-mix(in srgb, var(--workspace-text) var(--shadow-strength, 20%), transparent); }
+:focus-visible { outline: 2px solid var(--focus-color, var(--ring)); outline-offset: 2px; }
 .field {
-  @apply w-full rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-2.5 text-sm text-slate-200 outline-none placeholder:text-slate-500 focus:border-blue-400/60 focus:ring-1 focus:ring-blue-400/30;
+  @apply w-full rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-2.5 text-sm text-slate-200 outline-none placeholder:text-slate-500;
+  border-radius: var(--button-radius, 0.65rem);
 }
+.field:focus { border-color: var(--focus-color, var(--ring)); box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus-color, var(--ring)) 25%, transparent); }
 
 @layer base {
   * {

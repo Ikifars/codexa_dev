@@ -17,6 +17,15 @@ export type WorkspaceAppearance = {
   text_color: string
   muted_text_color: string
   border_color: string
+  focus_color: string
+  font_size_base: number
+  heading_scale: number
+  font_weight: 400 | 500 | 600 | 700
+  line_height: number
+  letter_spacing: number
+  button_radius: number
+  card_radius: number
+  shadow_strength: number
   appearance_palette: string
   accent_color: AccentColor
   font_family: FontFamily
@@ -39,6 +48,15 @@ const defaultAppearance: WorkspaceAppearance = {
   text_color: '#f8fafc',
   muted_text_color: '#94a3b8',
   border_color: '#253044',
+  focus_color: '#6485ff',
+  font_size_base: 16,
+  heading_scale: 1,
+  font_weight: 400,
+  line_height: 1.5,
+  letter_spacing: 0,
+  button_radius: 0.65,
+  card_radius: 0.75,
+  shadow_strength: 20,
   appearance_palette: 'custom',
   accent_color: 'blue',
   font_family: 'inter',
@@ -71,6 +89,15 @@ export function applyWorkspaceAppearance(appearance: WorkspaceAppearance): void 
   root.style.setProperty('--workspace-text', appearance.text_color)
   root.style.setProperty('--workspace-muted', appearance.muted_text_color)
   root.style.setProperty('--workspace-border', appearance.border_color)
+  root.style.setProperty('--focus-color', appearance.focus_color)
+  root.style.setProperty('--font-size-base', `${appearance.font_size_base}px`)
+  root.style.setProperty('--heading-scale', String(appearance.heading_scale))
+  root.style.setProperty('--font-weight-base', String(appearance.font_weight))
+  root.style.setProperty('--line-height-base', String(appearance.line_height))
+  root.style.setProperty('--letter-spacing-base', `${appearance.letter_spacing}em`)
+  root.style.setProperty('--button-radius', `${appearance.button_radius}rem`)
+  root.style.setProperty('--card-radius', `${appearance.card_radius}rem`)
+  root.style.setProperty('--shadow-strength', `${appearance.shadow_strength}%`)
   root.style.setProperty('--background', appearance.background_color)
   root.style.setProperty('--card', appearance.surface_color)
   root.style.setProperty('--popover', appearance.surface_color)
