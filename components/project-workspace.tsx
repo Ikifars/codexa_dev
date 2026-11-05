@@ -241,26 +241,28 @@ export function ProjectWorkspace({ projectId, permissions }: { projectId: string
   const taskPriorityOptions = [...new Set(tasks.map((task) => task.priority).filter(Boolean))]
   const extraStatuses = [...new Set(tasks.map((task) => boardStatus(task.status)).filter((status) => !columns.some((column) => column.status === status) && status !== 'Cancelado'))]
 
-  async function moveTask(task: ProjectTask, status: string) {
-    if (!canUpdateTasks || task.status === status || movingTaskId) return
+  async function reorderTask(task: ProjectTask, targetStatus: string, targetId?: string) {
+    if (!canUpdateTasks || movingTaskId) return
+    const sourceStatus = boardStatus(task.status)
     const previousTasks = tasks
+    const destination = tasks.filter((item) => item.id !== task.id && boardStatus(item.status) === targetStatus).sort((a, b) => a.sort_order - b.sort_order || a.created_at.localeCompare(b.created_at))
+    const targetIndex = targetId ? destination.findIndex((item) => item.id === targetId) : destination.length
+    if (targetId && targetIndex < 0) return
+    destination.splice(targetIndex, 0, { ...task, status: targetStatus })
+    const sourceRemaining = sourceStatus === targetStatus ? [] : tasks.filter((item) => item.id !== task.id && boardStatus(item.status) === sourceStatus)
+    const updates = [...destination.map((item, index) => ({ id: item.id, status: targetStatus, sort_order: index })), ...sourceRemaining.map((item, index) => ({ id: item.id, status: item.status, sort_order: index }))]
     setMovingTaskId(task.id)
     setError('')
-    setNotice('')
-    setTasks((current) => current.map((item) => item.id === task.id ? { ...item, status } : item))
-    const { error: updateError } = await supabase.from('project_tasks').update({ status }).eq('id', task.id).eq('project_id', projectId)
-    if (updateError) {
-      setTasks(previousTasks)
-      setError(updateError.message)
-    } else {
-      if (isComplete(status) && !isComplete(task.status)) {
-        const onTime = task.due_date && new Date(`${task.due_date}T23:59:59`) >= new Date()
-        void fetch('/api/workspace/xp/award', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ actionKey: onTime ? 'complete_task_on_time' : 'complete_task', entityType: 'task', entityId: task.id }) })
-      }
-      setNotice(`Tarefa movida para ${status}.`)
-      void loadData()
-    }
+    setTasks((current) => current.map((item) => { const next = updates.find((update) => update.id === item.id); return next ? { ...item, status: next.status, sort_order: next.sort_order } : item }))
+    const results = await Promise.all(updates.map((update) => supabase.from('project_tasks').update({ status: update.status, sort_order: update.sort_order }).eq('id', update.id).eq('project_id', projectId)))
+    const updateError = results.find((result) => result.error)?.error
+    if (updateError) { setTasks(previousTasks); setError(updateError.message) } else { setNotice(targetStatus === sourceStatus ? 'Ordem do card atualizada.' : `Tarefa movida para ${targetStatus}.`); if (isComplete(targetStatus) && !isComplete(task.status)) void fetch('/api/workspace/xp/award', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ actionKey: task.due_date && new Date(`${task.due_date}T23:59:59`) >= new Date() ? 'complete_task_on_time' : 'complete_task', entityType: 'task', entityId: task.id }) }) }
     setMovingTaskId('')
+  }
+
+  async function moveTask(task: ProjectTask, status: string) {
+    if (task.status === status) return
+    return reorderTask(task, status)
   }
 
   async function createTask(event: FormEvent<HTMLFormElement>) {
@@ -276,6 +278,7 @@ export function ProjectWorkspace({ projectId, permissions }: { projectId: string
       title: String(data.get('title') ?? '').trim(),
       description: String(data.get('description') ?? '').trim() || null,
       status: taskModal.status,
+      sort_order: tasks.filter((task) => boardStatus(task.status) === taskModal.status).reduce((max, task) => Math.max(max, task.sort_order), -1) + 1,
       priority: String(data.get('priority') ?? 'Média'),
       due_date: String(data.get('due_date') ?? '') || null,
       responsible_id: canAssign ? String(data.get('responsible_id') ?? '') || null : null,
@@ -556,7 +559,7 @@ export function ProjectWorkspace({ projectId, permissions }: { projectId: string
                     {cards.map((task) => {
                       const member = task.responsible_id ? memberById.get(task.responsible_id) : undefined
                       const overdue = Boolean(task.due_date && task.due_date < new Date().toISOString().slice(0, 10) && !isComplete(task.status) && !isCanceled(task.status))
-                      return <article key={task.id} draggable={canUpdateTasks && column.status !== 'Cancelado'} onDragStart={(event) => { if (!canUpdateTasks) return; event.dataTransfer.setData('text/plain', task.id); event.dataTransfer.effectAllowed = 'move' }} className={`rounded-lg border border-white/[0.08] bg-[#171d28] p-3 transition-colors hover:border-blue-400/30 ${movingTaskId === task.id ? 'opacity-50' : ''}`}>
+                      return <article key={task.id} draggable={canUpdateTasks && column.status !== 'Cancelado'} onDragStart={(event) => { if (!canUpdateTasks) return; event.dataTransfer.setData('text/plain', task.id); event.dataTransfer.effectAllowed = 'move' }} onDragOver={(event) => { if (canUpdateTasks) { event.preventDefault(); event.dataTransfer.dropEffect = 'move' } }} onDrop={(event) => { event.preventDefault(); event.stopPropagation(); const dragged = tasks.find((item) => item.id === event.dataTransfer.getData('text/plain')); if (dragged && dragged.id !== task.id) void reorderTask(dragged, column.status, task.id) }} className={`rounded-lg border border-white/[0.08] bg-[#171d28] p-3 cursor-grab transition-colors hover:border-blue-400/30 active:cursor-grabbing ${movingTaskId === task.id ? 'opacity-50' : ''}`}>
                         <button onClick={() => openTask(task)} className="w-full text-left"><span className="flex items-start gap-2"><GripVertical className="mt-0.5 size-4 shrink-0 text-slate-600" /><span className="line-clamp-2 min-w-0 font-medium leading-5 text-slate-100">{task.title}</span></span></button>
                         <div className="mt-3 flex flex-wrap items-center gap-1.5 pl-6">
                           <span className={`rounded border px-2 py-0.5 text-[11px] ${priorityTone(task.priority)}`}><Flag className="mr-1 inline size-3" />{task.priority}</span>
