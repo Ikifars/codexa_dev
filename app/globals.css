@@ -1,3 +1,4 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=Lato:wght@400;700&family=Manrope:wght@400;500;600;700&family=Merriweather:wght@400;700&family=Montserrat:wght@400;500;600;700&family=Nunito+Sans:wght@400;500;600;700&family=Open+Sans:wght@400;600;700&family=Outfit:wght@400;500;600;700&family=Playfair+Display:wght@400;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Poppins:wght@400;500;600;700&family=Roboto:wght@400;500;700&family=Source+Sans+3:wght@400;600;700&family=Work+Sans:wght@400;500;600;700&display=swap');
 @import 'tailwindcss';
 @import 'tw-animate-css';
 
@@ -180,7 +181,22 @@
 [data-accent='emerald'] { --primary: #42c995; --ring: #42c995; --sidebar-primary: #42c995; --chart-1: #42c995; }
 [data-accent='amber'] { --primary: #e5b45c; --ring: #e5b45c; --sidebar-primary: #e5b45c; --chart-1: #e5b45c; }
 [data-accent='rose'] { --primary: #ee7d9a; --ring: #ee7d9a; --sidebar-primary: #ee7d9a; --chart-1: #ee7d9a; }
+[data-font='inter'] body { font-family: Inter, ui-sans-serif, system-ui, sans-serif; }
+[data-font='roboto'] body { font-family: Roboto, ui-sans-serif, system-ui, sans-serif; }
+[data-font='open-sans'] body { font-family: 'Open Sans', ui-sans-serif, system-ui, sans-serif; }
+[data-font='lato'] body { font-family: Lato, ui-sans-serif, system-ui, sans-serif; }
+[data-font='montserrat'] body { font-family: Montserrat, ui-sans-serif, system-ui, sans-serif; }
+[data-font='poppins'] body { font-family: Poppins, ui-sans-serif, system-ui, sans-serif; }
+[data-font='nunito-sans'] body { font-family: 'Nunito Sans', ui-sans-serif, system-ui, sans-serif; }
 [data-font='manrope'] body { font-family: Manrope, Inter, ui-sans-serif, system-ui, sans-serif; }
+[data-font='dm-sans'] body { font-family: 'DM Sans', ui-sans-serif, system-ui, sans-serif; }
+[data-font='plus-jakarta'] body { font-family: 'Plus Jakarta Sans', ui-sans-serif, system-ui, sans-serif; }
+[data-font='outfit'] body { font-family: Outfit, ui-sans-serif, system-ui, sans-serif; }
+[data-font='source-sans-3'] body { font-family: 'Source Sans 3', ui-sans-serif, system-ui, sans-serif; }
+[data-font='ibm-plex-sans'] body { font-family: 'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif; }
+[data-font='work-sans'] body { font-family: 'Work Sans', ui-sans-serif, system-ui, sans-serif; }
+[data-font='merriweather'] body { font-family: Merriweather, Georgia, serif; }
+[data-font='playfair-display'] body { font-family: 'Playfair Display', Georgia, serif; }
 [data-font='ibm-plex-mono'] body { font-family: 'IBM Plex Mono', ui-monospace, SFMono-Regular, monospace; }
 [data-radius='small'] { --radius: 0.45rem; }
 [data-radius='large'] { --radius: 1rem; }
@@ -244,6 +260,14 @@ button, [role='button'] { border-radius: var(--button-radius, 0.65rem); }
   border-radius: var(--button-radius, 0.65rem);
 }
 .field:focus { border-color: var(--focus-color, var(--ring)); box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus-color, var(--ring)) 25%, transparent); }
+.workspace-shell button[class*='bg-[var(--primary)]'], .workspace-shell button.bg-primary { background-color: var(--button-primary-bg) !important; color: var(--button-primary-text) !important; }
+.workspace-shell button[class*='bg-[var(--primary)]']:hover, .workspace-shell button.bg-primary:hover { background-color: var(--button-primary-hover) !important; }
+.workspace-shell button:disabled { background-color: var(--button-disabled-bg) !important; color: var(--button-disabled-text) !important; }
+.workspace-shell a { color: var(--text-link); }
+.workspace-shell hr, .workspace-shell [role='separator'] { border-color: var(--border-divider); }
+[data-theme='light'] .workspace-shell .rounded-xl.border, [data-theme='light'] .workspace-shell .rounded-2xl.border { background-color: var(--background-card); border-color: var(--border-default); box-shadow: 0 8px 24px rgb(31 41 55 / 8%); }
+[data-theme='light'] .workspace-shell input, [data-theme='light'] .workspace-shell select, [data-theme='light'] .workspace-shell textarea { color: var(--text-primary); background-color: var(--background-input); }
+[data-theme='light'] .workspace-shell .text-muted-foreground { color: var(--text-secondary) !important; }
 
 @layer base {
   * {
@@ -252,7 +276,7 @@ button, [role='button'] { border-radius: var(--button-radius, 0.65rem); }
   body {
     @apply bg-background text-foreground;
     font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    background-color: #0b0d12;
+    background-color: var(--background);
     text-rendering: optimizeLegibility;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
