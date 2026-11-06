@@ -16,6 +16,7 @@ import { AccountWorkspace } from '@/components/account-workspace'
 import { GamifiedProfileWorkspace } from '@/components/gamified-profile-workspace'
 import { AuthScreen } from '@/components/auth-screen'
 import { XpSettingsWorkspace } from '@/components/xp-settings-workspace'
+import { CommandAssistant } from '@/components/command-assistant'
 import { UserAvatar } from '@/components/user-avatar'
 import { createClient } from '@/lib/supabase/client'
 import { hasWorkspaceAccess } from '@/lib/workspace-access'
@@ -47,6 +48,7 @@ import {
   Plus,
   Search,
   Settings,
+  Sparkles,
   ShieldCheck,
   Users,
   WalletCards,
@@ -144,6 +146,7 @@ function DashboardContent({ initialSection = 'Dashboard', page, permissions, pro
   const [activeSection, setActiveSection] = useState(initialSection)
   const [searchOpen, setSearchOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
+  const [assistantOpen, setAssistantOpen] = useState(false)
   const [notificationsOpen, setNotificationsOpen] = useState(false)
   const [notifications, setNotifications] = useState<WorkspaceNotification[]>([])
   const [notificationsLoading, setNotificationsLoading] = useState(false)
@@ -176,7 +179,7 @@ function DashboardContent({ initialSection = 'Dashboard', page, permissions, pro
   useEffect(() => {
     let active = true
     const loadAppearance = async () => {
-      const { data } = await createClient().from('user_preferences').select('theme,primary_color,secondary_color,tertiary_color,background_color,surface_color,sidebar_color,header_color,text_color,muted_text_color,border_color,appearance_palette,accent_color,font_family,radius_scale,contrast_mode,motion_mode,navigation_collapsed,table_density').maybeSingle()
+      const { data } = await createClient().from('user_preferences').select('theme,primary_color,secondary_color,tertiary_color,background_color,surface_color,sidebar_color,header_color,text_color,muted_text_color,border_color,focus_color,font_size_base,heading_scale,font_weight,line_height,letter_spacing,button_radius,card_radius,shadow_strength,appearance_palette,accent_color,font_family,radius_scale,contrast_mode,motion_mode,navigation_collapsed,table_density').maybeSingle()
       if (!active) return
       if (data) applyWorkspaceAppearance({ ...defaultAppearance, ...(data as Partial<WorkspaceAppearance>) })
       else applyWorkspaceTheme(getWorkspaceThemePreference())
@@ -205,6 +208,7 @@ function DashboardContent({ initialSection = 'Dashboard', page, permissions, pro
         event.preventDefault()
         setSearchOpen(true)
       } else if (event.key === 'Escape') {
+        setAssistantOpen(false)
         setSearchOpen(false)
         setNotificationsOpen(false)
       }
@@ -418,6 +422,8 @@ function DashboardContent({ initialSection = 'Dashboard', page, permissions, pro
       {searchOpen && <div className="fixed inset-0 z-[60] flex items-start justify-center bg-black/65 px-4 pt-[12vh]" onMouseDown={(event) => { if (event.target === event.currentTarget) setSearchOpen(false) }}>
         <section role="dialog" aria-modal="true" aria-label="Buscar módulos" className="w-full max-w-xl overflow-hidden rounded-xl border border-white/[0.1] bg-[#11161e] shadow-2xl">
           <div className="flex items-center gap-3 border-b border-white/[0.08] px-4"><Search className="size-4 text-slate-500" /><input ref={searchInput} value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="Buscar módulo..." className="h-14 flex-1 bg-transparent text-sm text-slate-100 outline-none placeholder:text-slate-500" /><kbd className="rounded border border-white/10 px-2 py-1 text-[10px] text-slate-500">ESC</kbd></div>
+          <button type="button" onClick={() => setAssistantOpen((current) => !current)} className="flex w-full items-center gap-3 border-b border-white/[0.07] px-4 py-3 text-left hover:bg-blue-500/10"><span className="grid size-7 place-items-center rounded-lg bg-blue-500/15 text-blue-300"><Sparkles className="size-3.5" /></span><span className="flex-1"><span className="block text-xs font-semibold text-slate-200">Perguntar ao assistente</span><span className="block text-[10px] text-slate-500">Use IA para navegar e entender o workspace</span></span><kbd className="rounded border border-white/10 px-2 py-1 text-[10px] text-slate-500">IA</kbd></button>
+          {assistantOpen && <CommandAssistant context={`Módulo atual: ${activeSection}. Permissões disponíveis: ${permissions.join(', ') || 'nenhuma informada'}.`} onClose={() => setAssistantOpen(false)} />}
           <div className="max-h-[55vh] overflow-y-auto p-2">
             {matchingSearchItems.length ? matchingSearchItems.map((item) => <button key={item.slug} onClick={() => openSearchItem(item)} className="flex w-full items-center justify-between rounded-lg px-3 py-3 text-left text-sm text-slate-200 hover:bg-blue-500/10 hover:text-blue-200"><span>{item.label}</span><span className="text-[11px] text-slate-500">{item.group}</span></button>)
               : <p className="px-3 py-8 text-center text-sm text-slate-500">Nenhum módulo encontrado.</p>}

@@ -35,10 +35,11 @@ type ProjectTask = {
   responsible_id: string | null
   created_at: string
   updated_at: string
+  sort_order: number
   participants?: string[] | null
 }
 
-type TeamMember = { id: string; user_id: string | null; full_name: string; email: string; status: string }
+type TeamMember = { id: string; user_id: string | null; full_name: string; email: string; status: string; avatar_url?: string | null }
 type Client = { id: string; legal_name: string; trade_name: string | null }
 type TaskComment = { id: string; task_id: string; author_id: string; body: string; created_at: string; updated_at: string }
 type ProjectActivity = { id: string; project_id: string; task_id: string | null; actor_id: string | null; event_type: string; summary: string; metadata: Record<string, unknown>; created_at: string }
@@ -101,6 +102,7 @@ export function ProjectWorkspace({ projectId, permissions }: { projectId: string
   const [projectAccessLevel, setProjectAccessLevel] = useState<'viewer' | 'collaborator' | 'manager' | null>(null)
   const [tasks, setTasks] = useState<ProjectTask[]>([])
   const [members, setMembers] = useState<TeamMember[]>([])
+  const [memberQuery, setMemberQuery] = useState('')
   const [clients, setClients] = useState<Client[]>([])
   const [taskIndicators, setTaskIndicators] = useState<Record<string, { comments: number; attachments: number }>>({})
   const [activity, setActivity] = useState<ProjectActivity[]>([])
@@ -139,8 +141,10 @@ export function ProjectWorkspace({ projectId, permissions }: { projectId: string
     const { data: authData } = await supabase.auth.getUser()
     const [projectResult, taskResult, memberResult, clientResult, activityResult, accessResult] = await Promise.all([
       supabase.from('projects').select('id,name,description,status,priority,due_date,completed_at,created_at,client_id,responsible_id,client:clients(id,legal_name,trade_name)').eq('id', projectId).maybeSingle(),
-      supabase.from('project_tasks').select('id,project_id,title,description,status,priority,due_date,responsible_id,participants,created_at,updated_at').eq('project_id', projectId).order('created_at', { ascending: true }),
-      supabase.from('team_members').select('id,user_id,full_name,email,status').order('full_name'),
+      supabase.from('project_tasks').select('id,project_id,title,description,status,priority,due_date,responsible_id,participants,created_at,updated_at,sort_order').eq('project_id', projectId).order('sort_order', { ascending: true }).order('created_at', { ascending: true }),
+      canAssign
+        ? supabase.rpc('list_project_assignable_members', { p_project_id: projectId })
+        : supabase.from('team_members').select('id,user_id,full_name,email,status').order('full_name'),
       supabase.from('clients').select('id,legal_name,trade_name').order('legal_name'),
       supabase.from('project_activity').select('id,project_id,task_id,actor_id,event_type,summary,metadata,created_at').eq('project_id', projectId).order('created_at', { ascending: false }).limit(100),
       supabase.rpc('project_access_level', { p_project_id: projectId }),
@@ -206,6 +210,8 @@ export function ProjectWorkspace({ projectId, permissions }: { projectId: string
     return result
   }, [members])
 
+  const assignableMembers = useMemo(() => members.filter((member) => normalize(`${member.full_name} ${member.email}`).includes(normalize(memberQuery))), [memberQuery, members])
+
   const validTasks = useMemo(() => {
     const uniqueTasks = new Map(tasks.map((task) => [task.id, task]))
     return [...uniqueTasks.values()].filter((task) => !isCanceled(task.status))
@@ -240,26 +246,28 @@ export function ProjectWorkspace({ projectId, permissions }: { projectId: string
   const taskPriorityOptions = [...new Set(tasks.map((task) => task.priority).filter(Boolean))]
   const extraStatuses = [...new Set(tasks.map((task) => boardStatus(task.status)).filter((status) => !columns.some((column) => column.status === status) && status !== 'Cancelado'))]
 
-  async function moveTask(task: ProjectTask, status: string) {
-    if (!canUpdateTasks || task.status === status || movingTaskId) return
+  async function reorderTask(task: ProjectTask, targetStatus: string, targetId?: string) {
+    if (!canUpdateTasks || movingTaskId) return
+    const sourceStatus = boardStatus(task.status)
     const previousTasks = tasks
+    const destination = tasks.filter((item) => item.id !== task.id && boardStatus(item.status) === targetStatus).sort((a, b) => a.sort_order - b.sort_order || a.created_at.localeCompare(b.created_at))
+    const targetIndex = targetId ? destination.findIndex((item) => item.id === targetId) : destination.length
+    if (targetId && targetIndex < 0) return
+    destination.splice(targetIndex, 0, { ...task, status: targetStatus })
+    const sourceRemaining = sourceStatus === targetStatus ? [] : tasks.filter((item) => item.id !== task.id && boardStatus(item.status) === sourceStatus)
+    const updates = [...destination.map((item, index) => ({ id: item.id, status: targetStatus, sort_order: index })), ...sourceRemaining.map((item, index) => ({ id: item.id, status: item.status, sort_order: index }))]
     setMovingTaskId(task.id)
     setError('')
-    setNotice('')
-    setTasks((current) => current.map((item) => item.id === task.id ? { ...item, status } : item))
-    const { error: updateError } = await supabase.from('project_tasks').update({ status }).eq('id', task.id).eq('project_id', projectId)
-    if (updateError) {
-      setTasks(previousTasks)
-      setError(updateError.message)
-    } else {
-      if (isComplete(status) && !isComplete(task.status)) {
-        const onTime = task.due_date && new Date(`${task.due_date}T23:59:59`) >= new Date()
-        void fetch('/api/workspace/xp/award', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ actionKey: onTime ? 'complete_task_on_time' : 'complete_task', entityType: 'task', entityId: task.id }) })
-      }
-      setNotice(`Tarefa movida para ${status}.`)
-      void loadData()
-    }
+    setTasks((current) => current.map((item) => { const next = updates.find((update) => update.id === item.id); return next ? { ...item, status: next.status, sort_order: next.sort_order } : item }))
+    const results = await Promise.all(updates.map((update) => supabase.from('project_tasks').update({ status: update.status, sort_order: update.sort_order }).eq('id', update.id).eq('project_id', projectId)))
+    const updateError = results.find((result) => result.error)?.error
+    if (updateError) { setTasks(previousTasks); setError(updateError.message) } else { setNotice(targetStatus === sourceStatus ? 'Ordem do card atualizada.' : `Tarefa movida para ${targetStatus}.`); if (isComplete(targetStatus) && !isComplete(task.status)) void fetch('/api/workspace/xp/award', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ actionKey: task.due_date && new Date(`${task.due_date}T23:59:59`) >= new Date() ? 'complete_task_on_time' : 'complete_task', entityType: 'task', entityId: task.id }) }) }
     setMovingTaskId('')
+  }
+
+  async function moveTask(task: ProjectTask, status: string) {
+    if (task.status === status) return
+    return reorderTask(task, status)
   }
 
   async function createTask(event: FormEvent<HTMLFormElement>) {
@@ -275,6 +283,7 @@ export function ProjectWorkspace({ projectId, permissions }: { projectId: string
       title: String(data.get('title') ?? '').trim(),
       description: String(data.get('description') ?? '').trim() || null,
       status: taskModal.status,
+      sort_order: tasks.filter((task) => boardStatus(task.status) === taskModal.status).reduce((max, task) => Math.max(max, task.sort_order), -1) + 1,
       priority: String(data.get('priority') ?? 'Média'),
       due_date: String(data.get('due_date') ?? '') || null,
       responsible_id: canAssign ? String(data.get('responsible_id') ?? '') || null : null,
@@ -536,7 +545,7 @@ export function ProjectWorkspace({ projectId, permissions }: { projectId: string
       {(tab === 'kanban' || tab === 'tasks') && <section className="space-y-4">
         <div className="flex flex-col gap-3 rounded-xl border border-white/[0.07] bg-[#11161e] p-4 lg:flex-row lg:items-center">
           <p className="mr-auto text-sm font-medium text-slate-300">{tab === 'kanban' ? 'Quadro de execução' : 'Lista detalhada de tarefas'}</p>
-          <label className="field flex items-center gap-2 lg:w-52"><Search className="size-3.5 text-slate-500" /><input value={taskQuery} onChange={(event) => setTaskQuery(event.target.value)} placeholder="Buscar tasks" className="min-w-0 flex-1 bg-transparent outline-none" aria-label="Buscar tasks" /></label>          <label className="field flex items-center gap-2"><span className="text-xs text-slate-500">Criada em</span><input type="date" value={taskDate} onChange={(event) => setTaskDate(event.target.value)} className="min-w-0 bg-transparent text-slate-200 outline-none" aria-label="Filtrar tarefas por data de criação" /></label><select value={taskFilter.responsible} onChange={(event) => setTaskFilter((current) => ({ ...current, responsible: event.target.value }))} className="field lg:w-52" aria-label="Filtrar tarefas por responsável"><option value="">Todos os responsáveis</option>{members.map((member) => <option key={member.user_id || member.id} value={member.user_id || member.id}>{member.full_name}</option>)}</select>
+          <label className="field flex items-center gap-2 lg:w-52"><Search className="size-3.5 text-slate-500" /><input value={taskQuery} onChange={(event) => setTaskQuery(event.target.value)} placeholder="Buscar tasks" className="min-w-0 flex-1 bg-transparent outline-none" aria-label="Buscar tasks" /></label>          <label className="field flex items-center gap-2"><span className="text-xs text-slate-500">Criada em</span><input type="date" value={taskDate} onChange={(event) => setTaskDate(event.target.value)} className="min-w-0 bg-transparent text-slate-200 outline-none" aria-label="Filtrar tarefas por data de criação" /></label><select value={taskFilter.responsible} onChange={(event) => setTaskFilter((current) => ({ ...current, responsible: event.target.value }))} className="field lg:w-52" aria-label="Filtrar tarefas por responsável"><option value="">Todos os responsáveis</option>{assignableMembers.map((member) => <option key={member.user_id || member.id} value={member.user_id || member.id}>{member.full_name}</option>)}</select>
           <select value={taskFilter.priority} onChange={(event) => setTaskFilter((current) => ({ ...current, priority: event.target.value }))} className="field lg:w-44" aria-label="Filtrar tarefas por prioridade"><option value="">Todas as prioridades</option>{taskPriorityOptions.map((priority) => <option key={priority}>{priority}</option>)}</select>
           <select value={taskFilter.deadline} onChange={(event) => setTaskFilter((current) => ({ ...current, deadline: event.target.value }))} className="field lg:w-44" aria-label="Filtrar tarefas por prazo"><option value="">Todos os prazos</option><option value="overdue">Atrasadas</option><option value="has-date">Com prazo</option><option value="no-date">Sem prazo</option></select>
         </div>
@@ -555,7 +564,7 @@ export function ProjectWorkspace({ projectId, permissions }: { projectId: string
                     {cards.map((task) => {
                       const member = task.responsible_id ? memberById.get(task.responsible_id) : undefined
                       const overdue = Boolean(task.due_date && task.due_date < new Date().toISOString().slice(0, 10) && !isComplete(task.status) && !isCanceled(task.status))
-                      return <article key={task.id} draggable={canUpdateTasks && column.status !== 'Cancelado'} onDragStart={(event) => { if (!canUpdateTasks) return; event.dataTransfer.setData('text/plain', task.id); event.dataTransfer.effectAllowed = 'move' }} className={`rounded-lg border border-white/[0.08] bg-[#171d28] p-3 transition-colors hover:border-blue-400/30 ${movingTaskId === task.id ? 'opacity-50' : ''}`}>
+                      return <article key={task.id} draggable={canUpdateTasks && column.status !== 'Cancelado'} onDragStart={(event) => { if (!canUpdateTasks) return; event.dataTransfer.setData('text/plain', task.id); event.dataTransfer.effectAllowed = 'move' }} onDragOver={(event) => { if (canUpdateTasks) { event.preventDefault(); event.dataTransfer.dropEffect = 'move' } }} onDrop={(event) => { event.preventDefault(); event.stopPropagation(); const dragged = tasks.find((item) => item.id === event.dataTransfer.getData('text/plain')); if (dragged && dragged.id !== task.id) void reorderTask(dragged, column.status, task.id) }} className={`rounded-lg border border-white/[0.08] bg-[#171d28] p-3 cursor-grab transition-colors hover:border-blue-400/30 active:cursor-grabbing ${movingTaskId === task.id ? 'opacity-50' : ''}`}>
                         <button onClick={() => openTask(task)} className="w-full text-left"><span className="flex items-start gap-2"><GripVertical className="mt-0.5 size-4 shrink-0 text-slate-600" /><span className="line-clamp-2 min-w-0 font-medium leading-5 text-slate-100">{task.title}</span></span></button>
                         <div className="mt-3 flex flex-wrap items-center gap-1.5 pl-6">
                           <span className={`rounded border px-2 py-0.5 text-[11px] ${priorityTone(task.priority)}`}><Flag className="mr-1 inline size-3" />{task.priority}</span>
@@ -596,7 +605,7 @@ export function ProjectWorkspace({ projectId, permissions }: { projectId: string
             <label className="grid gap-1.5 text-sm text-slate-300">Status<select name="status" defaultValue={project.status} className="field">{[...new Set([project.status, 'Backlog', 'Em andamento', 'Concluído', 'Arquivado'])].map((status) => <option key={status}>{status}</option>)}</select></label>
             <label className="grid gap-1.5 text-sm text-slate-300">Prioridade<select name="priority" defaultValue={project.priority} className="field">{[...new Set([project.priority, 'Baixa', 'Média', 'Alta', 'Urgente'])].map((value) => <option key={value}>{value}</option>)}</select></label>
             {canAssign && <label className="grid gap-1.5 text-sm text-slate-300">Cliente<select name="client_id" defaultValue={project.client_id ?? ''} className="field"><option value="">Sem cliente</option>{clients.map((client) => <option key={client.id} value={client.id}>{client.trade_name || client.legal_name}</option>)}</select></label>}
-            {canAssign && <label className="grid gap-1.5 text-sm text-slate-300">Responsável<select name="responsible_id" defaultValue={project.responsible_id ?? ''} className="field"><option value="">Sem responsável</option>{members.map((member) => <option key={member.user_id || member.id} value={member.user_id || member.id}>{member.full_name}</option>)}</select></label>}
+            {canAssign && <label className="grid gap-1.5 text-sm text-slate-300">Responsável<input value={memberQuery} onChange={(event) => setMemberQuery(event.target.value)} placeholder="Pesquisar funcionário" className="field" aria-label="Pesquisar funcionário" /><select name="responsible_id" defaultValue={project.responsible_id ?? ''} className="field"><option value="">Sem responsável</option>{assignableMembers.map((member) => <option key={member.user_id || member.id} value={member.user_id || member.id}>{member.full_name}</option>)}</select></label>}
             <label className="grid gap-1.5 text-sm text-slate-300">Prazo<input type="date" name="due_date" defaultValue={project.due_date ?? ''} className="field" /></label>
             <div className="mt-2 flex justify-end gap-2 sm:col-span-2"><button type="button" onClick={() => setEditProjectOpen(false)} className="min-h-10 rounded-lg px-4 text-sm text-slate-400 hover:bg-white/5">Cancelar</button><button disabled={taskSaving} className="flex min-h-10 items-center gap-2 rounded-lg bg-blue-500 px-4 text-sm font-semibold text-white hover:bg-blue-400 disabled:opacity-60"><Save className="size-4" />Salvar</button></div>
           </form>
@@ -614,7 +623,7 @@ export function ProjectWorkspace({ projectId, permissions }: { projectId: string
                 <div className="grid gap-3 sm:grid-cols-2">
                   <label className="grid gap-1.5 text-sm text-slate-300">Status<select name="status" defaultValue={taskModal.task ? boardStatus(taskModal.task.status) : taskModal.status} className="field">{columns.map((column) => <option key={column.status}>{column.status}</option>)}{extraStatuses.map((status) => <option key={status}>{status}</option>)}{taskModal.task && isCanceled(taskModal.task.status) && <option>Cancelado</option>}</select></label>
                   <label className="grid gap-1.5 text-sm text-slate-300">Prioridade<select name="priority" defaultValue={taskModal.task?.priority ?? 'Média'} className="field">{[...new Set([taskModal.task?.priority, 'Baixa', 'Média', 'Alta', 'Urgente'].filter((value): value is string => Boolean(value)))].map((priority) => <option key={priority}>{priority}</option>)}</select></label>
-                  {canAssign && <label className="grid gap-1.5 text-sm text-slate-300">Responsável<select name="responsible_id" defaultValue={taskModal.task?.responsible_id ?? ''} className="field"><option value="">Sem responsável</option>{members.map((member) => <option key={member.user_id || member.id} value={member.user_id || member.id}>{member.full_name}</option>)}</select></label>}
+                  {canAssign && <label className="grid gap-1.5 text-sm text-slate-300">Responsável<input value={memberQuery} onChange={(event) => setMemberQuery(event.target.value)} placeholder="Pesquisar funcionário" className="field" aria-label="Pesquisar funcionário" /><select name="responsible_id" defaultValue={taskModal.task?.responsible_id ?? ''} className="field"><option value="">Sem responsável</option>{assignableMembers.map((member) => <option key={member.user_id || member.id} value={member.user_id || member.id}>{member.full_name}</option>)}</select></label>}
                   <label className="grid gap-1.5 text-sm text-slate-300">Prazo<input type="date" name="due_date" defaultValue={taskModal.task?.due_date ?? ''} className="field" /></label>
                 </div>
               </fieldset>

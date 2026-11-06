@@ -26,7 +26,7 @@ export function ProjectMembersPanel({ projectId, permissions }: { projectId: str
   const load = useCallback(async () => {
     setLoading(true)
     const [{ data: available }, { data: assigned, error }, { data: access, error: accessError }] = await Promise.all([
-      supabase.from('team_members').select('id,user_id,full_name,email,status').order('full_name'),
+      supabase.rpc('list_project_member_directory', { p_project_id: projectId }),
       supabase.from('project_members').select('id,user_id,added_by,created_at,access_level,is_active,revoked_at').eq('project_id', projectId).order('created_at'),
       supabase.rpc('project_access_level', { p_project_id: projectId }),
     ])
