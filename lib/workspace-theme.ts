@@ -156,6 +156,7 @@ export function applyWorkspaceAppearance(appearance: WorkspaceAppearance): void 
   root.style.setProperty('--font-weight-base', String(appearance.font_weight))
   root.style.setProperty('--line-height-base', String(appearance.line_height))
   root.style.setProperty('--letter-spacing-base', `${appearance.letter_spacing}em`)
+  root.style.setProperty('--radius', `${appearance.card_radius}rem`)
   root.style.setProperty('--button-radius', `${appearance.button_radius}rem`)
   root.style.setProperty('--card-radius', `${appearance.card_radius}rem`)
   root.style.setProperty('--shadow-strength', `${appearance.shadow_strength}%`)
