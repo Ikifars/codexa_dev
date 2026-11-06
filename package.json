@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@ai-sdk/deepseek": "^3.0.79",
+    "@ai-sdk/openai": "^4.0.108",
     "@ai-sdk/react": "^4.0.166",
     "@babel/generator": "^8.0.6",
     "@babel/parser": "^8.0.8",

@@ -11,6 +11,9 @@ importers:
       '@ai-sdk/deepseek':
         specifier: ^3.0.79
         version: 3.0.79(zod@4.1.11)
+      '@ai-sdk/openai':
+        specifier: ^4.0.108
+        version: 4.0.108(zod@4.1.11)
       '@ai-sdk/react':
         specifier: ^4.0.166
         version: 4.0.166(react@19.2.4)(zod@4.1.11)
@@ -125,6 +128,12 @@ packages:
 
   '@ai-sdk/mcp@2.0.90':
     resolution: {integrity: sha512-OCjo4WpxpEtJ6ZIhoni9KxKfSHNua33Ox/gpUNtY+CU1TlZxMVBu5P0jbMNlUxTyqgD0UDtyw5IiU1PAE9Jwgw==}
+    engines: {node: '>=22'}
+    peerDependencies:
+      zod: ^3.25.76 || ^4.1.8
+
+  '@ai-sdk/openai@4.0.108':
+    resolution: {integrity: sha512-XmCnCVnahoFs9VUWsSzn4LyONdDkFivBVs5t7YUWi74giDRwh8VRX4hnk/BtBKEhiBNGRQd80/QTWlf6GsVtng==}
     engines: {node: '>=22'}
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
@@ -1277,6 +1286,12 @@ snapshots:
       '@ai-sdk/provider-utils': 5.0.74(zod@4.1.11)
       cross-spawn: 7.0.6
       pkce-challenge: 5.0.1
+      zod: 4.1.11
+
+  '@ai-sdk/openai@4.0.108(zod@4.1.11)':
+    dependencies:
+      '@ai-sdk/provider': 4.0.35
+      '@ai-sdk/provider-utils': 5.0.74(zod@4.1.11)
       zod: 4.1.11
 
   '@ai-sdk/provider-utils@5.0.74(zod@4.1.11)':
