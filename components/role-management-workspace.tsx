@@ -356,7 +356,7 @@ export function RoleManagementWorkspace({ initialView = 'roles' }: { initialView
       setInviteOpen(false)
       setNotice(result.warning || (result.accountCreated
         ? 'Conta criada e associada ao cargo. Compartilhe a senha inicial com a pessoa por um canal seguro.'
-        : 'Conta existente associada ao cargo selecionado.'))
+        : 'Conta existente confirmada, senha sincronizada quando informada e associada ao cargo selecionado.'))
       await load()
     } catch (inviteError) {
       setError(inviteError instanceof Error ? inviteError.message : 'Não foi possível criar o usuário.')

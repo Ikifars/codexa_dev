@@ -1,0 +1,173 @@
+'use client'
+
+import { useEffect, useRef, useState } from 'react'
+import Image from 'next/image'
+import { Maximize2, Minus, X } from 'lucide-react'
+import { createClient } from '@/lib/supabase/client'
+
+type TerminalStep = 'email' | 'password' | 'authenticating' | 'authenticated' | 'ready'
+type TerminalLine = { text: string; tone?: 'muted' | 'error' | 'success' | 'accent' }
+
+const bootLines: TerminalLine[] = [
+  { text: 'CODEXA TERMINAL [Version 1.0.0]', tone: 'accent' },
+  { text: 'Initializing secure authentication environment...', tone: 'muted' },
+  { text: 'Authentication service ready.', tone: 'success' },
+  { text: 'Please authenticate to continue.', tone: 'muted' },
+]
+
+function getAuthMessage(message: string) {
+  const normalized = message.toLowerCase()
+  if (normalized.includes('email not confirmed')) return 'Authentication failed: Confirm your email before continuing.'
+  if (normalized.includes('network') || normalized.includes('fetch')) return 'Connection error: Authentication service unavailable.'
+  return 'Authentication failed: Invalid credentials.'
+}
+
+export function LoginTerminal() {
+  const [open, setOpen] = useState(false)
+  const [expanded, setExpanded] = useState(false)
+  const [minimized, setMinimized] = useState(false)
+  const [step, setStep] = useState<TerminalStep>('email')
+  const [email, setEmail] = useState('')
+  const [input, setInput] = useState('')
+  const [lines, setLines] = useState<TerminalLine[]>(bootLines)
+  const [error, setError] = useState('')
+  const inputRef = useRef<HTMLInputElement>(null)
+  const outputRef = useRef<HTMLDivElement>(null)
+
+  function appendLine(line: TerminalLine) {
+    setLines((current) => [...current, line])
+  }
+
+  function resetForLogin() {
+    setStep('email')
+    setEmail('')
+    setInput('')
+    setError('')
+    setLines(bootLines)
+  }
+
+  function closeTerminal() {
+    setOpen(false)
+    setExpanded(false)
+    setMinimized(false)
+    setInput('')
+  }
+
+  async function openTerminal() {
+    setOpen(true)
+    setError('')
+    const { data } = await createClient().auth.getSession()
+    if (data.session) {
+      setStep('ready')
+      setLines([...bootLines, { text: 'Session already authenticated.', tone: 'success' }, { text: 'Welcome back, user.', tone: 'muted' }])
+    } else {
+      resetForLogin()
+    }
+  }
+
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      const isTerminalShortcut = (event.ctrlKey || event.metaKey) && event.shiftKey && (event.key === "'" || event.code === 'Quote')
+      if (isTerminalShortcut) {
+        event.preventDefault()
+        void openTerminal()
+        return
+      }
+      if (event.key === 'Escape' && open) {
+        event.preventDefault()
+        closeTerminal()
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [open])
+
+  useEffect(() => {
+    if (!open) return
+    inputRef.current?.focus()
+    outputRef.current?.scrollTo({ top: outputRef.current.scrollHeight, behavior: 'smooth' })
+  }, [open, step, lines, error])
+
+  function submitInput() {
+    const value = input.trim()
+    if (step === 'email') {
+      if (!value || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
+        setError('Invalid email format. Please enter a valid email.')
+        setInput('')
+        return
+      }
+      setEmail(value.toLowerCase())
+      setInput('')
+      setError('')
+      appendLine({ text: `user.email = ${value.toLowerCase()}`, tone: 'accent' })
+      appendLine({ text: 'user.password =', tone: 'accent' })
+      setStep('password')
+      return
+    }
+
+    if (step !== 'password' || !value) return
+    setInput('')
+    setError('')
+    setStep('authenticating')
+    appendLine({ text: 'Authenticating securely...', tone: 'muted' })
+    void authenticate(value)
+  }
+
+  async function authenticate(secret: string) {
+    try {
+      const { error: authError } = await createClient().auth.signInWithPassword({ email, password: secret })
+        if (authError) {
+        setStep('password')
+        setError(getAuthMessage(authError.message))
+        return
+      }
+      setStep('authenticated')
+      appendLine({ text: 'Authentication successful.', tone: 'success' })
+      appendLine({ text: 'Loading user workspace...', tone: 'muted' })
+      appendLine({ text: 'Access granted.', tone: 'success' })
+      window.setTimeout(() => { window.location.href = '/workspace' }, 650)
+    } catch {
+        setStep('password')
+      setError('Connection error: Authentication service unavailable.')
+    }
+  }
+
+  if (!open) return null
+
+  const prompt = step === 'email' ? 'user.email = ' : step === 'password' ? 'user.password = ' : 'system      = '
+  const displayInput = step === 'password' ? '•'.repeat(input.length) : input
+  const disabled = step === 'authenticating' || step === 'authenticated' || step === 'ready'
+
+  return (
+    <div className={`fixed inset-x-0 bottom-0 z-[100] flex justify-center px-2 pb-2 sm:px-4 ${expanded ? 'top-0 items-stretch pb-0' : ''}`} role="dialog" aria-modal="true" aria-label="Codexa Terminal">
+      <section className={`flex w-full flex-col overflow-hidden border border-[#303744] bg-[#101318] font-mono text-sm text-[#d7dae0] shadow-[0_-18px_70px_rgba(0,0,0,.48)] ${expanded ? 'h-full rounded-none' : 'h-[390px] max-w-5xl rounded-t-lg'}`}>
+        <header className="flex h-10 shrink-0 items-center justify-between border-b border-[#303744] bg-[#1b1d23] px-3 text-xs text-[#a8adb8]">
+          <div className="flex min-w-0 items-center gap-2">
+            <Image src="/codexa-logo.png" alt="" width={20} height={20} className="size-5 object-contain" />
+            <span className="tracking-[0.16em] text-[#dfe3eb]">TERMINAL</span>
+            <span className="hidden text-[#737a87] sm:inline">— Codexa Authentication</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <button type="button" onClick={() => setMinimized((value) => !value)} className="grid size-7 place-items-center rounded text-[#9aa1ad] hover:bg-white/[0.08] hover:text-white" aria-label={minimized ? 'Restaurar terminal' : 'Minimizar terminal'}><Minus className="size-3.5" /></button>
+            <button type="button" onClick={() => setExpanded((value) => !value)} className="grid size-7 place-items-center rounded text-[#9aa1ad] hover:bg-white/[0.08] hover:text-white" aria-label={expanded ? 'Restaurar terminal' : 'Expandir terminal'}><Maximize2 className="size-3.5" /></button>
+            <button type="button" onClick={closeTerminal} className="grid size-7 place-items-center rounded text-[#9aa1ad] hover:bg-red-500/20 hover:text-red-200" aria-label="Fechar terminal"><X className="size-4" /></button>
+          </div>
+        </header>
+        {!minimized && <>
+        <div ref={outputRef} className="min-h-0 flex-1 overflow-y-auto px-4 py-4 text-[12px] leading-6 sm:px-6 sm:text-[13px]">
+          {lines.map((line, index) => <div key={`${line.text}-${index}`} className={line.tone === 'error' ? 'text-[#f87171]' : line.tone === 'success' ? 'text-[#7dd3a8]' : line.tone === 'accent' ? 'text-[#8bd5ff]' : 'text-[#8d95a3]'}>{line.text}</div>)}
+          {error && <div className="mt-1 text-[#f87171]">{error}</div>}
+          {step === 'ready' && <div className="mt-2 text-[#7dd3a8]">Session is ready. Closing terminal...</div>}
+          {!disabled && <div className="mt-1 flex items-center gap-2 text-[#d7dae0]">
+            <span className="select-none text-[#8bd5ff]">{prompt}</span>
+            <span className="min-w-0 break-all">{displayInput}</span><span className="terminal-cursor" aria-hidden="true" />
+          </div>}
+          {step === 'authenticating' && <div className="mt-1 text-[#8d95a3]">Authenticating<span className="terminal-dots" aria-hidden="true">...</span></div>}
+        </div>
+        <div className="flex items-center gap-2 border-t border-[#303744] bg-[#17191f] px-3 py-2 text-[11px] text-[#737a87]"><span>Ctrl+Shift+&apos; para abrir</span><span className="ml-auto">ESC para fechar</span></div>
+        <input ref={inputRef} value={input} onChange={(event) => setInput(event.target.value)} onKeyDown={(event) => { if (event.nativeEvent.isComposing || event.keyCode === 229) return; if (event.key === 'Enter') { event.preventDefault(); submitInput() } }} disabled={disabled} type={step === 'password' ? 'password' : 'text'} autoCapitalize="none" autoCorrect="off" spellCheck={false} aria-label={step === 'password' ? 'Senha do terminal' : 'Entrada do terminal'} className="sr-only" />
+        </>}
+      </section>
+    </div>
+  )
+}

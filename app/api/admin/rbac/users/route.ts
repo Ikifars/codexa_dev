@@ -80,6 +80,7 @@ export async function POST(request: Request) {
 
     let authUser: { id: string } | null = null
     let createdAuthUser = false
+    let linkedExistingAuthUser = false
     for (let page = 1; !authUser; page += 1) {
       const { data, error } = await actor.supabase.auth.admin.listUsers({ page, perPage: 1000 })
       if (error) {
@@ -89,6 +90,7 @@ export async function POST(request: Request) {
       const found = data.users.find((user) => user.email?.trim().toLowerCase() === email)
       if (found) {
         authUser = { id: found.id }
+        linkedExistingAuthUser = true
         break
       }
       if (data.users.length < 1000) break
@@ -110,6 +112,17 @@ export async function POST(request: Request) {
       }
       authUser = { id: data.user.id }
       createdAuthUser = true
+    } else if (linkedExistingAuthUser) {
+      const { error: authUpdateError } = await actor.supabase.auth.admin.updateUserById(authUser.id, {
+        email_confirm: true,
+        ...(typeof body.password === 'string' && body.password.length >= 8 && body.password.length <= 128
+          ? { password: body.password }
+          : {}),
+      })
+      if (authUpdateError) {
+        console.error('Existing team account confirmation failed:', authUpdateError.message)
+        return NextResponse.json({ error: 'A conta existe, mas não foi possível habilitar o login.' }, { status: 502 })
+      }
     }
 
     const { data: existingAuthMemberships, error: authMembershipError } = await actor.supabase

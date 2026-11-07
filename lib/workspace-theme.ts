@@ -122,6 +122,7 @@ export function applyWorkspaceAppearance(appearance: WorkspaceAppearance): void 
   root.style.setProperty('--workspace-surface', surface)
   root.style.setProperty('--workspace-sidebar', sidebar)
   root.style.setProperty('--workspace-header', isLight ? lighten(appearance.header_color, 0.82) : appearance.header_color)
+  root.style.setProperty('--workspace-theme-scheme', isLight ? 'light' : 'dark')
   root.style.setProperty('--workspace-text', mainText)
   root.style.setProperty('--workspace-muted', mutedText)
   root.style.setProperty('--workspace-border', isLight ? darken(appearance.border_color, 0.05) : appearance.border_color)
