@@ -1,8 +1,7 @@
 import { Analytics } from '@vercel/analytics/next'
+import { LoginTerminal } from '@/components/login-terminal'
 import type { Metadata, Viewport } from 'next'
 import './globals.css'
-import { LoginTerminal } from '@/components/login-terminal'
-
 export const metadata: Metadata = {
   title: 'Codexa — Gestão inteligente para software houses',
   description: 'Plataforma Codexa para gestão comercial, operacional, financeira e administrativa.',

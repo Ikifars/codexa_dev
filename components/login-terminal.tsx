@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import Image from 'next/image'
 import { Maximize2, Minus, X } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
+import { signInWithPassword } from '@/lib/supabase/auth'
 
 type TerminalStep = 'email' | 'password' | 'authenticating' | 'authenticated' | 'ready'
 type TerminalLine = { text: string; tone?: 'muted' | 'error' | 'success' | 'accent' }
@@ -33,6 +34,8 @@ export function LoginTerminal() {
   const [error, setError] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
   const outputRef = useRef<HTMLDivElement>(null)
+  const openRef = useRef(open)
+  openRef.current = open
 
   function appendLine(line: TerminalLine) {
     setLines((current) => [...current, line])
@@ -55,32 +58,40 @@ export function LoginTerminal() {
 
   async function openTerminal() {
     setOpen(true)
+    setMinimized(false)
     setError('')
-    const { data } = await createClient().auth.getSession()
-    if (data.session) {
-      setStep('ready')
-      setLines([...bootLines, { text: 'Session already authenticated.', tone: 'success' }, { text: 'Welcome back, user.', tone: 'muted' }])
-    } else {
+    try {
+      const { data } = await createClient().auth.getSession()
+      if (data.session) {
+        setStep('ready')
+        setLines([...bootLines, { text: 'Session already authenticated.', tone: 'success' }, { text: 'Welcome back, user.', tone: 'muted' }])
+      } else {
+        resetForLogin()
+      }
+    } catch {
       resetForLogin()
+      setError('Connection error: Authentication service unavailable.')
     }
   }
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
-      const isTerminalShortcut = (event.ctrlKey || event.metaKey) && event.shiftKey && (event.key === "'" || event.code === 'Quote')
+      const isQuoteKey = ['Quote', 'Backquote'].includes(event.code) || ["'", '"', '´', 'Dead'].includes(event.key)
+      const isTerminalShortcut = (event.ctrlKey || event.metaKey) && event.shiftKey && isQuoteKey
       if (isTerminalShortcut) {
         event.preventDefault()
+        event.stopPropagation()
         void openTerminal()
         return
       }
-      if (event.key === 'Escape' && open) {
+      if (event.key === 'Escape' && openRef.current) {
         event.preventDefault()
         closeTerminal()
       }
     }
-    window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
-  }, [open])
+    document.addEventListener('keydown', onKeyDown, { capture: true })
+    return () => document.removeEventListener('keydown', onKeyDown, { capture: true })
+  }, [])
 
   useEffect(() => {
     if (!open) return
@@ -100,7 +111,6 @@ export function LoginTerminal() {
       setInput('')
       setError('')
       appendLine({ text: `user.email = ${value.toLowerCase()}`, tone: 'accent' })
-      appendLine({ text: 'user.password =', tone: 'accent' })
       setStep('password')
       return
     }
@@ -109,13 +119,14 @@ export function LoginTerminal() {
     setInput('')
     setError('')
     setStep('authenticating')
-    appendLine({ text: 'Authenticating securely...', tone: 'muted' })
+    appendLine({ text: 'Authenticating user...', tone: 'muted' })
+    appendLine({ text: 'Connecting to Codexa authentication service...', tone: 'muted' })
     void authenticate(value)
   }
 
   async function authenticate(secret: string) {
     try {
-      const { error: authError } = await createClient().auth.signInWithPassword({ email, password: secret })
+      const { error: authError } = await signInWithPassword(email, secret)
         if (authError) {
         setStep('password')
         setError(getAuthMessage(authError.message))
@@ -165,7 +176,7 @@ export function LoginTerminal() {
           {step === 'authenticating' && <div className="mt-1 text-[#8d95a3]">Authenticating<span className="terminal-dots" aria-hidden="true">...</span></div>}
         </div>
         <div className="flex items-center gap-2 border-t border-[#303744] bg-[#17191f] px-3 py-2 text-[11px] text-[#737a87]"><span>Ctrl+Shift+&apos; para abrir</span><span className="ml-auto">ESC para fechar</span></div>
-        <input ref={inputRef} value={input} onChange={(event) => setInput(event.target.value)} onKeyDown={(event) => { if (event.nativeEvent.isComposing || event.keyCode === 229) return; if (event.key === 'Enter') { event.preventDefault(); submitInput() } }} disabled={disabled} type={step === 'password' ? 'password' : 'text'} autoCapitalize="none" autoCorrect="off" spellCheck={false} aria-label={step === 'password' ? 'Senha do terminal' : 'Entrada do terminal'} className="sr-only" />
+        <input ref={inputRef} value={input} onChange={(event) => setInput(event.target.value)} onKeyDown={(event) => { if (event.nativeEvent.isComposing || event.keyCode === 229) return; if (event.key === 'Enter') { event.preventDefault(); submitInput() } }} disabled={disabled} type={step === 'password' ? 'password' : 'text'} autoCapitalize="none" autoCorrect="off" spellCheck={false} aria-label={step === 'password' ? 'Senha do terminal' : 'Entrada do terminal'} tabIndex={open && !minimized ? 0 : -1} className="absolute left-[-10000px] h-px w-px opacity-0" />
         </>}
       </section>
     </div>
