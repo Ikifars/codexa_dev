@@ -1,6 +1,7 @@
 import { Analytics } from '@vercel/analytics/next'
 import type { Metadata, Viewport } from 'next'
 import './globals.css'
+import { LoginTerminal } from '@/components/login-terminal'
 
 export const metadata: Metadata = {
   title: 'Codexa — Gestão inteligente para software houses',
@@ -29,6 +30,7 @@ export default function RootLayout({
     <html lang="pt-BR">
       <body className="antialiased">
         {children}
+        <LoginTerminal />
         {process.env.NODE_ENV === 'production' && <Analytics />}
       </body>
     </html>
