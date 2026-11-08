@@ -265,22 +265,8 @@ button, [role='button'] { border-radius: var(--button-radius, 0.65rem); }
   border-radius: var(--button-radius, 0.65rem);
 }
 .field:focus { border-color: var(--focus-color, var(--ring)); box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus-color, var(--ring)) 25%, transparent); }
-.workspace-shell button[class*='bg-[var(--primary)]'],
-.workspace-shell button.bg-primary,
-.workspace-shell button[class~='bg-white'],
-.workspace-shell button[class~='bg-violet-500'],
-.workspace-shell button[class~='bg-blue-500'],
-.workspace-shell button[class~='bg-indigo-500'],
-.workspace-shell button[class~='bg-cyan-500'],
-.workspace-shell button[class~='bg-emerald-500'],
-.workspace-shell button[class~='bg-purple-500'] { background-color: var(--button-primary-bg) !important; color: var(--button-primary-text) !important; }
-.workspace-shell button[class~='bg-white']:hover,
-.workspace-shell button[class~='bg-violet-500']:hover,
-.workspace-shell button[class~='bg-blue-500']:hover,
-.workspace-shell button[class~='bg-indigo-500']:hover,
-.workspace-shell button[class~='bg-cyan-500']:hover,
-.workspace-shell button[class~='bg-emerald-500']:hover,
-.workspace-shell button[class~='bg-purple-500']:hover { background-color: var(--button-primary-hover) !important; }
+.workspace-shell button[class*='bg-[var(--primary)]'], .workspace-shell button.bg-primary, .workspace-shell button[class~='bg-white'], .workspace-shell button[class~='bg-violet-500'] { background-color: var(--button-primary-bg) !important; color: var(--button-primary-text) !important; }
+.workspace-shell button[class~='bg-white']:hover, .workspace-shell button[class~='bg-violet-500']:hover { background-color: var(--button-primary-hover) !important; }
 .workspace-shell button[class*='bg-[var(--primary)]']:hover, .workspace-shell button.bg-primary:hover { background-color: var(--button-primary-hover) !important; }
 .workspace-shell button:disabled { background-color: var(--button-disabled-bg) !important; color: var(--button-disabled-text) !important; }
 .workspace-shell a { color: var(--text-link); }
