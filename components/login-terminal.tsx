@@ -6,7 +6,7 @@ import { Maximize2, Minus, X } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { signInWithPassword } from '@/lib/supabase/auth'
 
-type TerminalStep = 'email' | 'password' | 'authenticating' | 'authenticated' | 'ready'
+type TerminalStep = 'email' | 'password' | 'recover-email' | 'recovering' | 'recovered' | 'authenticating' | 'authenticated' | 'ready'
 type TerminalLine = { text: string; tone?: 'muted' | 'error' | 'success' | 'accent' }
 
 const bootLines: TerminalLine[] = [
@@ -35,6 +35,7 @@ export function LoginTerminal() {
   const inputRef = useRef<HTMLInputElement>(null)
   const outputRef = useRef<HTMLDivElement>(null)
   const openRef = useRef(open)
+  const touchTimerRef = useRef<number | null>(null)
   openRef.current = open
 
   function appendLine(line: TerminalLine) {
@@ -56,15 +57,20 @@ export function LoginTerminal() {
     setInput('')
   }
 
-  async function openTerminal() {
+  async function openTerminal(mode: 'login' | 'recovery' = 'login') {
     setOpen(true)
     setMinimized(false)
     setError('')
     try {
       const { data } = await createClient().auth.getSession()
       if (data.session) {
-        setStep('ready')
-        setLines([...bootLines, { text: 'Session already authenticated.', tone: 'success' }, { text: 'Welcome back, user.', tone: 'muted' }])
+        window.location.assign('/workspace')
+        return
+      }
+      if (mode === 'recovery') {
+        setStep('recover-email')
+        setInput('')
+        setLines([...bootLines, { text: 'Recovery mode enabled.', tone: 'accent' }, { text: 'Enter your account email to recover access.', tone: 'muted' }])
       } else {
         resetForLogin()
       }
@@ -78,6 +84,12 @@ export function LoginTerminal() {
     function onKeyDown(event: KeyboardEvent) {
       const isQuoteKey = ['Quote', 'Backquote'].includes(event.code) || ["'", '"', '´', 'Dead'].includes(event.key)
       const isTerminalShortcut = (event.ctrlKey || event.metaKey) && event.shiftKey && isQuoteKey
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'r') {
+        event.preventDefault()
+        event.stopPropagation()
+        void openTerminal('recovery')
+        return
+      }
       if (isTerminalShortcut) {
         event.preventDefault()
         event.stopPropagation()
@@ -94,6 +106,26 @@ export function LoginTerminal() {
   }, [])
 
   useEffect(() => {
+    function onTouchStart(event: TouchEvent) {
+      if (event.touches.length !== 3 || openRef.current) return
+      touchTimerRef.current = window.setTimeout(() => { void openTerminal() }, 700)
+    }
+    function onTouchEnd() {
+      if (touchTimerRef.current !== null) window.clearTimeout(touchTimerRef.current)
+      touchTimerRef.current = null
+    }
+    document.addEventListener('touchstart', onTouchStart, { passive: true })
+    document.addEventListener('touchend', onTouchEnd, { passive: true })
+    document.addEventListener('touchcancel', onTouchEnd, { passive: true })
+    return () => {
+      onTouchEnd()
+      document.removeEventListener('touchstart', onTouchStart)
+      document.removeEventListener('touchend', onTouchEnd)
+      document.removeEventListener('touchcancel', onTouchEnd)
+    }
+  }, [])
+
+  useEffect(() => {
     if (!open) return
     inputRef.current?.focus()
     outputRef.current?.scrollTo({ top: outputRef.current.scrollHeight, behavior: 'smooth' })
@@ -101,6 +133,21 @@ export function LoginTerminal() {
 
   function submitInput() {
     const value = input.trim()
+    if (step === 'recover-email') {
+      if (!value || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
+        setError('Invalid email format. Please enter a valid email.')
+        setInput('')
+        return
+      }
+      setInput('')
+      setError('')
+      setStep('recovering')
+      appendLine({ text: `recovery.email = ${value.toLowerCase()}`, tone: 'accent' })
+      appendLine({ text: 'Generating secure recovery link...', tone: 'muted' })
+      void recoverPassword(value.toLowerCase())
+      return
+    }
+
     if (step === 'email') {
       if (!value || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
         setError('Invalid email format. Please enter a valid email.')
@@ -124,6 +171,24 @@ export function LoginTerminal() {
     void authenticate(value)
   }
 
+  async function recoverPassword(recoveryEmail: string) {
+    try {
+      const redirectTo = `${window.location.origin}/auth/callback?next=/reset-password`
+      const { error: recoveryError } = await createClient().auth.resetPasswordForEmail(recoveryEmail, { redirectTo })
+      if (recoveryError) {
+        setStep('recover-email')
+        setError('Recovery failed: We could not send the recovery link.')
+        return
+      }
+      setStep('recovered')
+      appendLine({ text: 'Recovery link sent successfully.', tone: 'success' })
+      appendLine({ text: 'Check your inbox to continue.', tone: 'muted' })
+    } catch {
+      setStep('recover-email')
+      setError('Connection error: Authentication service unavailable.')
+    }
+  }
+
   async function authenticate(secret: string) {
     try {
       const { error: authError } = await signInWithPassword(email, secret)
@@ -145,9 +210,9 @@ export function LoginTerminal() {
 
   if (!open) return null
 
-  const prompt = step === 'email' ? 'user.email = ' : step === 'password' ? 'user.password = ' : 'system      = '
+  const prompt = step === 'email' ? 'user.email = ' : step === 'password' ? 'user.password = ' : step === 'recover-email' ? 'recovery.email = ' : 'system      = '
   const displayInput = step === 'password' ? '•'.repeat(input.length) : input
-  const disabled = step === 'authenticating' || step === 'authenticated' || step === 'ready'
+  const disabled = ['authenticating', 'authenticated', 'ready', 'recovering', 'recovered'].includes(step)
 
   return (
     <div className={`fixed inset-x-0 bottom-0 z-[100] flex justify-center px-2 pb-2 sm:px-4 ${expanded ? 'top-0 items-stretch pb-0' : ''}`} role="dialog" aria-modal="true" aria-label="Codexa Terminal">
@@ -175,7 +240,7 @@ export function LoginTerminal() {
           </div>}
           {step === 'authenticating' && <div className="mt-1 text-[#8d95a3]">Authenticating<span className="terminal-dots" aria-hidden="true">...</span></div>}
         </div>
-        <div className="flex items-center gap-2 border-t border-[#303744] bg-[#17191f] px-3 py-2 text-[11px] text-[#737a87]"><span>Ctrl+Shift+&apos; para abrir</span><span className="ml-auto">ESC para fechar</span></div>
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-[#303744] bg-[#17191f] px-3 py-2 text-[11px] text-[#737a87]"><span>Ctrl+Shift+&apos; para abrir</span><span>Ctrl+R para recuperar senha</span><span className="ml-auto">ESC para fechar</span></div>
         <input ref={inputRef} value={input} onChange={(event) => setInput(event.target.value)} onKeyDown={(event) => { if (event.nativeEvent.isComposing || event.keyCode === 229) return; if (event.key === 'Enter') { event.preventDefault(); submitInput() } }} disabled={disabled} type={step === 'password' ? 'password' : 'text'} autoCapitalize="none" autoCorrect="off" spellCheck={false} aria-label={step === 'password' ? 'Senha do terminal' : 'Entrada do terminal'} tabIndex={open && !minimized ? 0 : -1} className="absolute left-[-10000px] h-px w-px opacity-0" />
         </>}
       </section>
