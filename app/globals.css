@@ -138,6 +138,11 @@
   --popover-foreground: #172033;
   --primary: #3159d8;
   --primary-foreground: #ffffff;
+  --text-info: #3159d8;
+  --text-accent: #755be0;
+  --text-success: #16845b;
+  --text-warning: #a66b00;
+  --text-danger: #c63d50;
   --secondary: #e9edf6;
   --secondary-foreground: #26324a;
   --muted: #eef1f7;
@@ -182,7 +187,9 @@
 [data-theme='light'] .workspace-shell .bg-white\/5,
 [data-theme='light'] .workspace-shell .bg-white\/\[0\.025\],
 [data-theme='light'] .workspace-shell .bg-white\/\[0\.03\] { background-color: color-mix(in srgb, var(--foreground) 5%, transparent); }
-[data-accent] .text-blue-400, [data-accent] .text-blue-300, [data-accent] .text-violet-400 { color: var(--primary) !important; }
+[data-accent] .text-blue-400, [data-accent] .text-blue-300 { color: var(--text-info) !important; }
+[data-accent] .text-violet-400 { color: var(--text-accent) !important; }
+[data-accent] .text-emerald-400 { color: var(--text-success) !important; }
 [data-accent] .border-blue-400 { border-color: var(--primary) !important; }
 [data-accent] .bg-blue-400 { background-color: var(--primary) !important; }
 [data-accent='violet'] { --primary: #9b7cff; --ring: #9b7cff; --sidebar-primary: #9b7cff; --chart-1: #9b7cff; }
@@ -226,6 +233,11 @@ html[data-font] button[class~='bg-white'], html[data-font] button[class*='bg-whi
     --popover-foreground: #f1f4fa;
     --primary: #6485ff;
     --primary-foreground: #ffffff;
+    --text-info: #6485ff;
+    --text-accent: #9b7cff;
+    --text-success: #42c995;
+    --text-warning: #e6b85c;
+    --text-danger: #e77986;
     --secondary: #1b2230;
     --secondary-foreground: #e7ecf6;
     --muted: #1a202c;
@@ -274,8 +286,53 @@ button, [role='button'] { border-radius: var(--button-radius, 0.65rem); }
 .field:focus { border-color: var(--focus-color, var(--ring)); box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus-color, var(--ring)) 25%, transparent); }
 .workspace-shell button[class*='bg-[var(--primary)]'], .workspace-shell button.bg-primary, .workspace-shell button[class~='bg-white'], .workspace-shell button[class~='bg-violet-500'] { background-color: var(--button-primary-bg) !important; color: var(--button-primary-text) !important; }
 .workspace-shell button[class~='bg-white']:hover, .workspace-shell button[class~='bg-violet-500']:hover { background-color: var(--button-primary-hover) !important; }
-.workspace-shell button[class*='bg-[var(--primary)]']:hover, .workspace-shell button.bg-primary:hover { background-color: var(--button-primary-hover) !important; }
-.workspace-shell button:disabled { background-color: var(--button-disabled-bg) !important; color: var(--button-disabled-text) !important; }
+  .workspace-shell button[class*='bg-[var(--primary)]']:hover, .workspace-shell button.bg-primary:hover { background-color: var(--button-primary-hover) !important; }
+  /* Every actionable colored button uses the appearance primary token. Destructive actions remain semantic. */
+  [data-theme] .workspace-shell button[class~='bg-blue-300'],
+  [data-theme] .workspace-shell button[class~='bg-blue-400'],
+  [data-theme] .workspace-shell button[class~='bg-blue-500'],
+  [data-theme] .workspace-shell button[class~='bg-blue-600'],
+  [data-theme] .workspace-shell button[class~='bg-blue-700'],
+  [data-theme] .workspace-shell button[class~='bg-cyan-300'],
+  [data-theme] .workspace-shell button[class~='bg-cyan-400'],
+  [data-theme] .workspace-shell button[class~='bg-cyan-500'],
+  [data-theme] .workspace-shell button[class~='bg-cyan-600'],
+  [data-theme] .workspace-shell button[class~='bg-violet-300'],
+  [data-theme] .workspace-shell button[class~='bg-violet-400'],
+  [data-theme] .workspace-shell button[class~='bg-violet-500'],
+  [data-theme] .workspace-shell button[class~='bg-violet-600'],
+  [data-theme] .workspace-shell button[class~='bg-indigo-500'],
+  [data-theme] .workspace-shell button[class~='bg-indigo-600'],
+  [data-theme] .workspace-shell button[class~='bg-emerald-500'],
+  [data-theme] .workspace-shell button[class~='bg-emerald-600'],
+  [data-theme] .workspace-shell button[class~='bg-teal-500'],
+  [data-theme] .workspace-shell button[class~='bg-teal-600'],
+  [data-theme] .workspace-shell button[class~='bg-orange-500'],
+  [data-theme] .workspace-shell button[class~='bg-amber-500'] {
+    background-color: var(--button-primary-bg) !important;
+    color: var(--button-primary-text) !important;
+    border-color: transparent !important;
+  }
+  [data-theme] .workspace-shell button[class~='bg-blue-300']:hover,
+  [data-theme] .workspace-shell button[class~='bg-blue-400']:hover,
+  [data-theme] .workspace-shell button[class~='bg-blue-500']:hover,
+  [data-theme] .workspace-shell button[class~='bg-blue-600']:hover,
+  [data-theme] .workspace-shell button[class~='bg-cyan-300']:hover,
+  [data-theme] .workspace-shell button[class~='bg-cyan-400']:hover,
+  [data-theme] .workspace-shell button[class~='bg-cyan-500']:hover,
+  [data-theme] .workspace-shell button[class~='bg-violet-300']:hover,
+  [data-theme] .workspace-shell button[class~='bg-violet-400']:hover,
+  [data-theme] .workspace-shell button[class~='bg-violet-500']:hover,
+  [data-theme] .workspace-shell button[class~='bg-violet-600']:hover,
+  [data-theme] .workspace-shell button[class~='bg-indigo-500']:hover,
+  [data-theme] .workspace-shell button[class~='bg-emerald-500']:hover,
+  [data-theme] .workspace-shell button[class~='bg-emerald-600']:hover,
+  [data-theme] .workspace-shell button[class~='bg-teal-500']:hover,
+  [data-theme] .workspace-shell button[class~='bg-orange-500']:hover,
+  [data-theme] .workspace-shell button[class~='bg-amber-500']:hover {
+    background-color: var(--button-primary-hover) !important;
+  }
+  .workspace-shell button:disabled { background-color: var(--button-disabled-bg) !important; color: var(--button-disabled-text) !important; }
 .workspace-shell a { color: var(--text-link); }
 .workspace-shell hr, .workspace-shell [role='separator'] { border-color: var(--border-divider); }
 [data-theme='light'] .workspace-shell .rounded-xl.border, [data-theme='light'] .workspace-shell .rounded-2xl.border { background-color: var(--background-card); border-color: var(--border-default); box-shadow: 0 8px 24px rgb(31 41 55 / 8%); }

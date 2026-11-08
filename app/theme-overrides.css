@@ -46,11 +46,22 @@
   color: var(--workspace-text) !important;
 }
 
-[data-theme] .workspace-shell [class*='text-blue-400'],
-[data-theme] .workspace-shell [class*='text-blue-300'],
-[data-theme] .workspace-shell [class*='text-violet-400'],
-[data-theme] .workspace-shell [class*='text-emerald-400'] {
-  color: var(--primary-custom, var(--primary)) !important;
+[data-theme] .workspace-shell :not(button)[class*='text-blue-400'],
+[data-theme] .workspace-shell :not(button)[class*='text-blue-300'] {
+  color: var(--text-info) !important;
+}
+
+[data-theme] .workspace-shell :not(button)[class*='text-violet-400'] {
+  color: var(--text-accent) !important;
+}
+
+[data-theme] .workspace-shell :not(button)[class*='text-emerald-400'] {
+  color: var(--text-success) !important;
+}
+
+/* Page eyebrow labels are secondary copy, never action/button color. */
+[data-theme] .workspace-shell :not(button)[class*='uppercase'][class*='tracking-'] {
+  color: var(--workspace-muted, var(--muted-foreground)) !important;
 }
 
 .workspace-shell :focus-visible {

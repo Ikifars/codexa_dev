@@ -1,5 +1,4 @@
 import { Analytics } from '@vercel/analytics/next'
-import { LoginTerminal } from '@/components/login-terminal'
 import type { Metadata, Viewport } from 'next'
 import './globals.css'
 export const metadata: Metadata = {
@@ -29,7 +28,6 @@ export default function RootLayout({
     <html lang="pt-BR">
       <body className="antialiased">
         {children}
-        <LoginTerminal />
         {process.env.NODE_ENV === 'production' && <Analytics />}
       </body>
     </html>
