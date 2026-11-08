@@ -92,8 +92,16 @@ export function AccountWorkspace({ section, initialName = '' }: { section: strin
     setSaving(true)
     setMessage('')
     setMessageError(false)
-    const { error } = await createClient().from('user_preferences').upsert({
-      user_id: (await createClient().auth.getUser()).data.user?.id,
+    const supabase = createClient()
+    const { data: authData, error: authError } = await supabase.auth.getUser()
+    if (authError || !authData.user) {
+      setMessageError(true)
+      setMessage('Sua sessão expirou. Entre novamente para salvar as preferências.')
+      setSaving(false)
+      return
+    }
+    const { error } = await supabase.from('user_preferences').upsert({
+      user_id: authData.user.id,
       theme: appearance.theme,
       primary_color: appearance.primary_color,
       secondary_color: appearance.secondary_color,
@@ -120,6 +128,8 @@ export function AccountWorkspace({ section, initialName = '' }: { section: strin
       radius_scale: appearance.radius_scale,
       contrast_mode: appearance.contrast_mode,
       motion_mode: appearance.motion_mode,
+      navigation_collapsed: appearance.navigation_collapsed,
+      table_density: appearance.table_density,
     }, { onConflict: 'user_id' })
     if (error) {
       setMessageError(true)
