@@ -64,7 +64,12 @@ export function LoginTerminal() {
     try {
       const { data } = await createClient().auth.getSession()
       if (data.session) {
-        window.location.assign('/workspace')
+        setStep('authenticating')
+        setLines([...bootLines, { text: 'Existing session detected.', tone: 'muted' }, { text: 'Validating authenticated session...', tone: 'muted' }, { text: 'Authentication successful.', tone: 'success' }, { text: 'Loading user workspace...', tone: 'muted' }, { text: 'Access granted.', tone: 'success' }])
+        window.setTimeout(() => {
+          setStep('authenticated')
+          window.setTimeout(() => { window.location.assign('/workspace') }, 650)
+        }, 650)
         return
       }
       if (mode === 'recovery') {
