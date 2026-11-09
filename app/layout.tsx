@@ -1,6 +1,7 @@
 import { Analytics } from '@vercel/analytics/next'
 import type { Metadata, Viewport } from 'next'
 import './globals.css'
+
 export const metadata: Metadata = {
   title: 'Codexa — Gestão inteligente para software houses',
   description: 'Plataforma Codexa para gestão comercial, operacional, financeira e administrativa.',
