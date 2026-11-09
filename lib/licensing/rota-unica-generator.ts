@@ -231,7 +231,7 @@ function addActiveTabGuards(ast: t.File) {
       const access = t.memberExpression(t.identifier('allowedModules'), t.identifier(activeTab), true)
       const guard = t.ifStatement(
         t.binaryExpression('===', access, t.booleanLiteral(false)),
-        t.blockStatement([t.returnStatement(t.jsxElement(t.jsxOpeningElement(t.jsxIdentifier('CodexaModuleBlocked'), [], true), null, [], true))]),
+        t.blockStatement([t.returnStatement(t.jsxElement(t.jsxOpeningElement(t.jsxIdentifier('CodexaModuleBlocked'), [], true), null, []))]),
       )
       const lastDeclarationIndex = path.node.body.body.reduce((lastIndex, statement, index) => t.isVariableDeclaration(statement) ? index : lastIndex, -1)
       path.node.body.body.splice(lastDeclarationIndex + 1, 0, guard)

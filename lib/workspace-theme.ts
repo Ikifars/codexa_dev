@@ -157,6 +157,10 @@ export function applyWorkspaceAppearance(appearance: WorkspaceAppearance): void 
   root.style.setProperty('--interactive-selected', appearance.primary_color)
   root.style.setProperty('--interactive-hover', hover)
   root.style.setProperty('--focus-color', appearance.focus_color)
+  const fontFamilies: Record<FontFamily, string> = {
+    inter: 'Inter, ui-sans-serif, system-ui, sans-serif', roboto: 'Roboto, ui-sans-serif, system-ui, sans-serif', 'open-sans': 'Open Sans, ui-sans-serif, system-ui, sans-serif', lato: 'Lato, ui-sans-serif, system-ui, sans-serif', montserrat: 'Montserrat, ui-sans-serif, system-ui, sans-serif', poppins: 'Poppins, ui-sans-serif, system-ui, sans-serif', 'nunito-sans': 'Nunito Sans, ui-sans-serif, system-ui, sans-serif', manrope: 'Manrope, ui-sans-serif, system-ui, sans-serif', 'dm-sans': 'DM Sans, ui-sans-serif, system-ui, sans-serif', 'plus-jakarta': 'Plus Jakarta Sans, ui-sans-serif, system-ui, sans-serif', outfit: 'Outfit, ui-sans-serif, system-ui, sans-serif', 'source-sans-3': 'Source Sans 3, ui-sans-serif, system-ui, sans-serif', 'ibm-plex-sans': 'IBM Plex Sans, ui-sans-serif, system-ui, sans-serif', 'work-sans': 'Work Sans, ui-sans-serif, system-ui, sans-serif', merriweather: 'Merriweather, Georgia, serif', 'playfair-display': 'Playfair Display, Georgia, serif', 'ibm-plex-mono': 'IBM Plex Mono, ui-monospace, monospace',
+  }
+  root.style.setProperty('--workspace-font-family', fontFamilies[appearance.font_family] ?? fontFamilies.inter)
   root.style.setProperty('--font-size-base', `${appearance.font_size_base}px`)
   root.style.setProperty('--heading-scale', String(appearance.heading_scale))
   root.style.setProperty('--font-weight-base', String(appearance.font_weight))
