@@ -6,10 +6,6 @@ function normalizePattern(pattern: string) {
   return value
 }
 
-export function buildBlockedPageSource() {
-  return `'use client'\n\nexport default function AcessoBloqueadoPage() {\n  return (\n    <main style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', padding: '24px', fontFamily: 'system-ui, sans-serif' }}>\n      <section style={{ maxWidth: '520px', textAlign: 'center' }}>\n        <p style={{ fontSize: '12px', fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#64748b' }}>Acesso restrito</p>\n        <h1 style={{ marginTop: '12px', fontSize: '32px', lineHeight: 1.15 }}>Módulo não disponível</h1>\n        <p style={{ marginTop: '16px', color: '#64748b', lineHeight: 1.6 }}>Este módulo não está liberado para esta licença. Entre em contato com a Codexa Personalizada para solicitar a liberação.</p>\n      </section>\n    </main>\n  )\n}\n`
-}
-
 export function buildMiddlewareSource(routes: MiddlewareRoute[], apiUrl: string) {
   const unique = new Map<string, MiddlewareRoute>()
   for (const route of routes) {

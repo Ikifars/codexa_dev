@@ -122,7 +122,6 @@ export function applyWorkspaceAppearance(appearance: WorkspaceAppearance): void 
   root.style.setProperty('--workspace-surface', surface)
   root.style.setProperty('--workspace-sidebar', sidebar)
   root.style.setProperty('--workspace-header', isLight ? lighten(appearance.header_color, 0.82) : appearance.header_color)
-  root.style.setProperty('--workspace-theme-scheme', isLight ? 'light' : 'dark')
   root.style.setProperty('--workspace-text', mainText)
   root.style.setProperty('--workspace-muted', mutedText)
   root.style.setProperty('--workspace-border', isLight ? darken(appearance.border_color, 0.05) : appearance.border_color)
@@ -136,11 +135,6 @@ export function applyWorkspaceAppearance(appearance: WorkspaceAppearance): void 
   root.style.setProperty('--text-muted', mutedText)
   root.style.setProperty('--text-inverse', primaryText)
   root.style.setProperty('--text-link', appearance.primary_color)
-  root.style.setProperty('--text-info', appearance.primary_color)
-  root.style.setProperty('--text-accent', appearance.secondary_color)
-  root.style.setProperty('--text-success', appearance.tertiary_color)
-  root.style.setProperty('--text-warning', appearance.secondary_color)
-  root.style.setProperty('--text-danger', appearance.accent_color === 'rose' ? appearance.primary_color : '#e77986')
   root.style.setProperty('--border-default', appearance.border_color)
   root.style.setProperty('--border-subtle', isLight ? lighten(appearance.border_color, 0.35) : appearance.border_color)
   root.style.setProperty('--border-strong', appearance.border_color)
@@ -157,10 +151,6 @@ export function applyWorkspaceAppearance(appearance: WorkspaceAppearance): void 
   root.style.setProperty('--interactive-selected', appearance.primary_color)
   root.style.setProperty('--interactive-hover', hover)
   root.style.setProperty('--focus-color', appearance.focus_color)
-  const fontFamilies: Record<FontFamily, string> = {
-    inter: 'Inter, ui-sans-serif, system-ui, sans-serif', roboto: 'Roboto, ui-sans-serif, system-ui, sans-serif', 'open-sans': 'Open Sans, ui-sans-serif, system-ui, sans-serif', lato: 'Lato, ui-sans-serif, system-ui, sans-serif', montserrat: 'Montserrat, ui-sans-serif, system-ui, sans-serif', poppins: 'Poppins, ui-sans-serif, system-ui, sans-serif', 'nunito-sans': 'Nunito Sans, ui-sans-serif, system-ui, sans-serif', manrope: 'Manrope, ui-sans-serif, system-ui, sans-serif', 'dm-sans': 'DM Sans, ui-sans-serif, system-ui, sans-serif', 'plus-jakarta': 'Plus Jakarta Sans, ui-sans-serif, system-ui, sans-serif', outfit: 'Outfit, ui-sans-serif, system-ui, sans-serif', 'source-sans-3': 'Source Sans 3, ui-sans-serif, system-ui, sans-serif', 'ibm-plex-sans': 'IBM Plex Sans, ui-sans-serif, system-ui, sans-serif', 'work-sans': 'Work Sans, ui-sans-serif, system-ui, sans-serif', merriweather: 'Merriweather, Georgia, serif', 'playfair-display': 'Playfair Display, Georgia, serif', 'ibm-plex-mono': 'IBM Plex Mono, ui-monospace, monospace',
-  }
-  root.style.setProperty('--workspace-font-family', fontFamilies[appearance.font_family] ?? fontFamilies.inter)
   root.style.setProperty('--font-size-base', `${appearance.font_size_base}px`)
   root.style.setProperty('--heading-scale', String(appearance.heading_scale))
   root.style.setProperty('--font-weight-base', String(appearance.font_weight))
