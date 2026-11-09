@@ -182,8 +182,15 @@ function DashboardContent({ initialSection = 'Dashboard', page, permissions, pro
   useEffect(() => {
     let active = true
     const loadAppearance = async () => {
-      const { data } = await createClient().from('user_preferences').select('theme,primary_color,secondary_color,tertiary_color,background_color,surface_color,sidebar_color,header_color,text_color,muted_text_color,border_color,focus_color,font_size_base,heading_scale,font_weight,line_height,letter_spacing,button_radius,card_radius,shadow_strength,appearance_palette,accent_color,font_family,radius_scale,contrast_mode,motion_mode,navigation_collapsed,table_density').maybeSingle()
-      if (!active) return
+      const supabase = createClient()
+      const { data: authData } = await supabase.auth.getUser()
+      if (!authData.user) return
+      const { data, error } = await supabase
+        .from('user_preferences')
+        .select('theme,primary_color,secondary_color,tertiary_color,background_color,surface_color,sidebar_color,header_color,text_color,muted_text_color,border_color,focus_color,font_size_base,heading_scale,font_weight,line_height,letter_spacing,button_radius,card_radius,shadow_strength,appearance_palette,accent_color,font_family,radius_scale,contrast_mode,motion_mode,navigation_collapsed,table_density')
+        .eq('user_id', authData.user.id)
+        .maybeSingle()
+      if (!active || error) return
       if (data) applyWorkspaceAppearance({ ...defaultAppearance, ...(data as Partial<WorkspaceAppearance>) })
       else applyWorkspaceTheme(getWorkspaceThemePreference())
     }
