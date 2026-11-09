@@ -56,7 +56,7 @@ export function AccountWorkspace({ section, initialName = '' }: { section: strin
     const supabase = createClient()
     void Promise.all([
       supabase.auth.getUser(),
-      supabase.from('user_preferences').select('theme,primary_color,secondary_color,tertiary_color,background_color,surface_color,sidebar_color,header_color,text_color,muted_text_color,border_color,focus_color,font_size_base,heading_scale,font_weight,line_height,letter_spacing,button_radius,card_radius,shadow_strength,appearance_palette,accent_color,font_family,radius_scale,contrast_mode,motion_mode,navigation_collapsed,table_density').maybeSingle(),
+      supabase.from('user_preferences').select('theme,primary_color,secondary_color,tertiary_color,background_color,surface_color,sidebar_color,header_color,text_color,muted_text_color,border_color,focus_color,font_size_base,heading_scale,font_weight,line_height,letter_spacing,button_radius,card_radius,shadow_strength,appearance_palette,accent_color,font_family,radius_scale,contrast_mode,motion_mode').maybeSingle(),
     ]).then(([authResult, preferencesResult]) => {
       const { data, error }: { data: { user: User | null }; error: AuthError | null } = authResult
       if (error) {
@@ -92,8 +92,16 @@ export function AccountWorkspace({ section, initialName = '' }: { section: strin
     setSaving(true)
     setMessage('')
     setMessageError(false)
-    const { error } = await createClient().from('user_preferences').upsert({
-      user_id: (await createClient().auth.getUser()).data.user?.id,
+    const supabase = createClient()
+    const { data: authData, error: authError } = await supabase.auth.getUser()
+    if (authError || !authData.user) {
+      setMessageError(true)
+      setMessage('Sua sessão expirou. Entre novamente para salvar a aparência.')
+      setSaving(false)
+      return
+    }
+    const { error } = await supabase.from('user_preferences').upsert({
+      user_id: authData.user.id,
       theme: appearance.theme,
       primary_color: appearance.primary_color,
       secondary_color: appearance.secondary_color,
